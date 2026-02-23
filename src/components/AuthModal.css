@@ -1,0 +1,254 @@
+/* ── Backdrop ──────────────────────────────────────────────────────────────── */
+.am-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(7,8,10,0.85);
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+  animation: amFadeIn 0.2s ease;
+}
+
+@keyframes amFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ── Modal box ─────────────────────────────────────────────────────────────── */
+.am-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%; max-width: 440px;
+  padding: 2.5rem;
+  position: relative;
+  animation: amSlideUp 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+@keyframes amSlideUp {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.am-close {
+  position: absolute; top: 1.2rem; right: 1.2rem;
+  background: none; border: none;
+  color: var(--text-muted);
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; transition: all 0.15s;
+}
+.am-close:hover { color: var(--text); background: var(--surface2); }
+
+/* ── View wrapper ──────────────────────────────────────────────────────────── */
+.am-view {
+  display: flex; flex-direction: column; gap: 0;
+  animation: amViewIn 0.22s ease both;
+}
+
+@keyframes amViewIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Brand ─────────────────────────────────────────────────────────────────── */
+.am-brand {
+  font-family: var(--font-display);
+  font-size: 1.5rem; letter-spacing: 0.1em;
+  color: var(--text); margin-bottom: 1.6rem;
+}
+.am-brand em { color: var(--accent); font-style: normal; }
+
+/* ── Title & subtitle ──────────────────────────────────────────────────────── */
+.am-title {
+  font-family: var(--font-display);
+  font-size: 2.4rem; letter-spacing: 0.04em;
+  color: var(--text); margin-bottom: 0.3rem; line-height: 1;
+}
+
+.am-sub {
+  font-size: 0.88rem; color: var(--text-muted);
+  margin-bottom: 1.8rem; line-height: 1.6;
+}
+.am-sub strong { color: var(--accent); }
+
+/* ── Fields ────────────────────────────────────────────────────────────────── */
+.am-field {
+  display: flex; flex-direction: column; gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.am-field label {
+  font-size: 0.75rem; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-muted);
+}
+
+.am-required { color: var(--accent); }
+.am-optional { text-transform: none; letter-spacing: 0; color: var(--text-dim); font-size: 0.7rem; }
+
+.am-field input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.8rem 1rem;
+  color: var(--text); font-size: 0.92rem;
+  outline: none; transition: border-color 0.18s;
+  width: 100%;
+}
+.am-field input:focus { border-color: var(--accent); }
+.am-field input.error { border-color: var(--danger); }
+.am-field input::placeholder { color: var(--text-dim); }
+
+.am-field-error {
+  font-size: 0.75rem; color: var(--danger);
+}
+
+/* ── Row (2-col) ───────────────────────────────────────────────────────────── */
+.am-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
+.am-btn {
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  border-radius: 6px; font-weight: 600;
+  font-size: 0.92rem; letter-spacing: 0.03em;
+  padding: 0.85rem 1.5rem;
+  transition: all 0.18s;
+}
+
+.am-btn.full { width: 100%; }
+
+.am-btn.primary {
+  background: var(--accent); border: none; color: var(--bg);
+  margin-top: 0.5rem;
+}
+.am-btn.primary:hover:not(:disabled) { background: #d8ff6f; transform: translateY(-1px); }
+.am-btn.primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.am-btn.ghost {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  margin-top: 0.5rem;
+}
+.am-btn.ghost:hover { border-color: var(--border-hover); color: var(--text); }
+
+/* ── Divider ───────────────────────────────────────────────────────────────── */
+.am-divider {
+  display: flex; align-items: center; gap: 1rem;
+  margin: 0.6rem 0;
+}
+.am-divider::before, .am-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.am-divider span { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
+
+/* ── Hint ──────────────────────────────────────────────────────────────────── */
+.am-hint {
+  font-size: 0.75rem; color: var(--text-dim);
+  text-align: center; margin-top: 1.2rem;
+}
+.am-hint code {
+  color: var(--accent); background: rgba(200,255,87,0.08);
+  padding: 0.1em 0.4em; border-radius: 3px; font-size: 0.72rem;
+}
+
+/* ── Stepper ───────────────────────────────────────────────────────────────── */
+.am-stepper {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin-bottom: 1.4rem;
+}
+
+.am-step {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-size: 0.75rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-dim);
+  transition: color 0.3s;
+}
+
+.am-step span {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; font-weight: 700;
+  border: 1.5px solid var(--border);
+  transition: all 0.3s;
+}
+
+.am-step.active { color: var(--text); }
+.am-step.active span { border-color: var(--accent); background: var(--accent); color: var(--bg); }
+.am-step.done { color: var(--accent); }
+.am-step.done span { border-color: var(--accent); color: var(--accent); background: transparent; }
+
+.am-step-line {
+  flex: 1; height: 1px;
+  background: var(--border); transition: background 0.4s;
+}
+.am-step-line.filled { background: var(--accent); }
+
+/* ── Status screens ────────────────────────────────────────────────────────── */
+.am-status {
+  align-items: center; text-align: center; padding: 1rem 0;
+}
+
+.am-status-icon {
+  width: 72px; height: 72px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem; font-weight: 700;
+  margin-bottom: 1.5rem;
+  animation: iconPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes iconPop {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.am-status-icon.success {
+  background: rgba(200,255,87,0.1);
+  border: 2px solid var(--accent);
+  color: var(--accent);
+}
+
+.am-status-icon.fail {
+  background: rgba(255,92,92,0.1);
+  border: 2px solid var(--danger);
+  color: var(--danger);
+}
+
+/* ── Loading bar (auto-close) ──────────────────────────────────────────────── */
+.am-loading-bar {
+  width: 100%; height: 3px;
+  background: var(--surface2);
+  border-radius: 100px;
+  overflow: hidden; margin-top: 1.5rem;
+}
+
+.am-loading-fill {
+  height: 100%; width: 0%;
+  background: var(--accent);
+  border-radius: 100px;
+  animation: loadingFill 1.4s ease forwards;
+}
+
+@keyframes loadingFill {
+  to { width: 100%; }
+}
+
+/* ── Spinner ───────────────────────────────────────────────────────────────── */
+.am-spinner {
+  width: 16px; height: 16px;
+  border: 2px solid rgba(7,8,10,0.3);
+  border-top-color: var(--bg);
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Mobile ────────────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .am-modal { padding: 2rem 1.5rem; }
+  .am-row { grid-template-columns: 1fr; }
+}

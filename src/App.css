@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:          #f5f2ed;
+  --bg-2:        #ede9e2;
+  --surface:     #ffffff;
+  --surface-2:   #f9f7f4;
+
+  --purple:      #6c3fc5;
+  --purple-mid:  #7e52d4;
+  --purple-light:#a07ee8;
+  --purple-dim:  rgba(108,63,197,0.1);
+  --purple-glow: rgba(108,63,197,0.18);
+
+  --text:        #1a1523;
+  --text-2:      #4a4260;
+  --text-muted:  #8b80a8;
+  --text-dim:    #b8b0cc;
+
+  --border:      rgba(108,63,197,0.12);
+  --border-2:    rgba(108,63,197,0.25);
+  --danger:      #e03c3c;
+  --success:     #2e9e6b;
+
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-body:    'Plus Jakarta Sans', sans-serif;
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app { min-height: 100vh; }
+button { cursor: pointer; font-family: var(--font-body); }
+input  { font-family: var(--font-body); }

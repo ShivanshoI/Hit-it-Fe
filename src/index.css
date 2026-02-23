@@ -1,0 +1,26 @@
+/* Vite default index.css - completely replaced */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #f7f7f7;
+  color: #222;
+  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 18px;
+  line-height: 1.5;
+  height: 100%;
+  padding: 0;
+}
+
+#root {
+  min-height: 100vh;
+  height: 100%;
+}

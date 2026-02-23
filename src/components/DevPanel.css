@@ -1,0 +1,89 @@
+.dp {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 9999;
+  background: #16121f;
+  border: 1px solid rgba(160,126,232,0.3);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(160,126,232,0.1);
+  font-family: var(--font-body);
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+
+.dp--open  { width: 240px; }
+.dp--closed { width: auto; }
+
+/* ── Toggle bar ─────────────────────────────────────────────────────────────── */
+.dp-toggle {
+  width: 100%; display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.65rem 0.9rem;
+  background: none; border: none;
+  color: #a07ee8; font-size: 0.75rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  transition: background 0.15s;
+}
+.dp-toggle:hover { background: rgba(160,126,232,0.08); }
+.dp-toggle-icon { font-size: 0.9rem; }
+.dp-toggle-label { flex: 1; text-align: left; }
+.dp-chevron { font-size: 0.65rem; opacity: 0.6; }
+
+/* ── Body ───────────────────────────────────────────────────────────────────── */
+.dp-body {
+  padding: 0 0.9rem 0.9rem;
+  border-top: 1px solid rgba(160,126,232,0.15);
+}
+
+.dp-note {
+  font-size: 0.67rem; color: #5a5070;
+  padding: 0.55rem 0 0.7rem;
+  letter-spacing: 0.02em;
+}
+
+/* ── Section ────────────────────────────────────────────────────────────────── */
+.dp-section { margin-bottom: 0.9rem; }
+.dp-section-title {
+  display: block; font-size: 0.65rem; text-transform: uppercase;
+  letter-spacing: 0.12em; color: #6b6080; font-weight: 700;
+  margin-bottom: 0.55rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgba(160,126,232,0.1);
+}
+
+/* ── Pass/fail row ──────────────────────────────────────────────────────────── */
+.dp-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+.dp-label { font-size: 0.72rem; color: #8b80a8; font-weight: 500; }
+.dp-pills { display: flex; gap: 0.3rem; }
+
+.dp-pill {
+  padding: 0.3rem 0.55rem;
+  border-radius: 5px; font-size: 0.68rem; font-weight: 700;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.04); color: #5a5070;
+  transition: all 0.15s;
+}
+.dp-pill:hover { color: #a07ee8; border-color: rgba(160,126,232,0.3); }
+.dp-pill--pass { background: rgba(46,158,107,0.18); border-color: rgba(46,158,107,0.45); color: #4eca8b; }
+.dp-pill--fail { background: rgba(224,60,60,0.18); border-color: rgba(224,60,60,0.45); color: #f07070; }
+
+/* ── Jump to state ──────────────────────────────────────────────────────────── */
+.dp-jump-group { margin-bottom: 0.55rem; }
+.dp-jump-label {
+  display: block; font-size: 0.65rem; color: #6b6080;
+  font-weight: 600; margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 0.08em;
+}
+.dp-jump-btns { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.dp-jump-btn {
+  padding: 0.28rem 0.55rem;
+  border-radius: 4px; font-size: 0.68rem; font-weight: 600;
+  background: rgba(108,63,197,0.12);
+  border: 1px solid rgba(108,63,197,0.22);
+  color: #a07ee8;
+  transition: all 0.15s;
+}
+.dp-jump-btn:hover {
+  background: rgba(108,63,197,0.25);
+  border-color: rgba(160,126,232,0.5);
+  color: #c8a8f8;
+}
