@@ -8,6 +8,11 @@
 }
 @keyframes gsFadeIn { from { opacity:0; } to { opacity:1; } }
 
+.gs-overlay--closing {
+  animation: gsFadeOut 0.28s ease forwards;
+}
+@keyframes gsFadeOut { from { opacity:1; } to { opacity:0; } }
+
 /* ── Panel ───────────────────────────────────────────────────────────────────── */
 .gs-panel {
   width: 540px; height: 100%;
@@ -19,6 +24,11 @@
   position: relative; overflow: hidden;
 }
 @keyframes gsSlideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+.gs-panel--closing {
+  animation: gsSlideOut 0.28s cubic-bezier(0.4,0,0.2,1) forwards;
+}
+@keyframes gsSlideOut { from { transform: translateX(0); } to { transform: translateX(100%); } }
 
 /* ── Drag handle ─────────────────────────────────────────────────────────────── */
 .gs-drag-handle {

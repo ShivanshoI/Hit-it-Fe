@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import './GlobalStore.css';
 
 // ─── Initial Data ─────────────────────────────────────────────────────────────
@@ -321,7 +321,15 @@ export default function GlobalStore({ collectionName, onClose }) {
   const [showAdd, setShowAdd]         = useState(false);
   const [newCatDraft, setNewCatDraft] = useState('');
   const [showCatEdit, setShowCatEdit] = useState(false);
+  const [closing, setClosing]         = useState(false);
   const panelRef = useRef(null);
+
+  // Smooth close — play exit animation then unmount
+  const handleClose = useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    setTimeout(() => onClose(), 280);
+  }, [closing, onClose]);
 
   // Drag to resize
   const dragging = useRef(false);
@@ -339,6 +347,18 @@ export default function GlobalStore({ collectionName, onClose }) {
     window.addEventListener('mouseup', onUp);
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, []);
+
+  // Close only GlobalStore on Escape — stop propagation so parent modal doesn't also close
+  useEffect(() => {
+    const onKey = e => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', onKey, true); // capture phase to fire before parent
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [handleClose]);
 
   const allTags = [...new Set(vars.flatMap(v => v.tags))];
 
@@ -374,9 +394,9 @@ export default function GlobalStore({ collectionName, onClose }) {
   const activeEnvData = envs.find(e => e.id === activeEnv);
 
   return (
-    <div className="gs-overlay" onClick={onClose}>
+    <div className={`gs-overlay${closing ? ' gs-overlay--closing' : ''}`} onClick={handleClose}>
       <div
-        className="gs-panel"
+        className={`gs-panel${closing ? ' gs-panel--closing' : ''}`}
         ref={panelRef}
         onClick={e => e.stopPropagation()}
       >
