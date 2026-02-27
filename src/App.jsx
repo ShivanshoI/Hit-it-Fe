@@ -3,6 +3,7 @@ import LandingPage from './pages/LandingPage';
 import HomePage from './pages/HomePage';
 import AuthModal from './components/AuthModal';
 import DevPanel from './components/DevPanel';
+import { MockApiProvider } from './components/MockApiProvider';
 import './App.css';
 
 export default function App() {
@@ -35,29 +36,31 @@ export default function App() {
   };
 
   return (
-    <div className="app">
-      {isLoggedIn ? (
-        <HomePage user={user} onLogout={() => { setUser(null); setIsLoggedIn(false); }} />
-      ) : (
-        <LandingPage onOpenAuth={() => setModalOpen(true)} />
-      )}
+    <MockApiProvider>
+      <div className="app">
+        {isLoggedIn ? (
+          <HomePage user={user} onLogout={() => { setUser(null); setIsLoggedIn(false); }} />
+        ) : (
+          <LandingPage onOpenAuth={() => setModalOpen(true)} />
+        )}
 
-      {modalOpen && (
-        <AuthModal
-          onClose={handleModalClose}
-          onSuccess={handleLoginSuccess}
-          devConfig={devConfig}
-          forcedView={forcedView}
-        />
-      )}
+        {modalOpen && (
+          <AuthModal
+            onClose={handleModalClose}
+            onSuccess={handleLoginSuccess}
+            devConfig={devConfig}
+            forcedView={forcedView}
+          />
+        )}
 
-      {import.meta.env.DEV && (
-        <DevPanel
-          config={devConfig}
-          onChange={setDevConfig}
-          onForceView={handleForceView}
-        />
-      )}
-    </div>
+        {import.meta.env.DEV && (
+          <DevPanel
+            config={devConfig}
+            onChange={setDevConfig}
+            onForceView={handleForceView}
+          />
+        )}
+      </div>
+    </MockApiProvider>
   );
 }

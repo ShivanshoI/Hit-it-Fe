@@ -1,5 +1,6 @@
 import GlobalStore from './GlobalStore';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useMockApi } from './MockApiProvider';
 import './CollectionModal.css';
 
 // ─── Per-collection request shape (what the backend will return in future) ────
@@ -222,15 +223,33 @@ function CurlPanel({ curls, activeCurl, onSelect, onAdd, onRename, open, globals
 }
 
 // ─── Comments Panel ───────────────────────────────────────────────────────────
-function CommentsPanel({ open, onClose }) {
+function CommentsPanel({ open, onClose, collectionId }) {
+  const { mockApiHit } = useMockApi();
   const [comments, setComments] = useState(MOCK_COMMENTS);
   const [draft, setDraft] = useState('');
   const [showResolved, setShowResolved] = useState(false);
   const visible = comments.filter(c => showResolved || !c.resolved);
-  const addComment = () => {
+  
+  const addComment = async () => {
     if (!draft.trim()) return;
-    setComments(p => [...p, { id:Date.now(), author:'You', avatar:'Y', time:'just now', text:draft.trim(), resolved:false }]);
-    setDraft('');
+    try {
+      const newComment = await mockApiHit('POST', `/api/collections/${collectionId}/comments`, { 
+        id:Date.now(), author:'You', avatar:'Y', time:'just now', text:draft.trim(), resolved:false 
+      });
+      setComments(p => [...p, newComment]);
+      setDraft('');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const resolveComment = async (id) => {
+    try {
+      await mockApiHit('PATCH', `/api/comments/${id}`, { resolved: true });
+      setComments(p => p.map(x => x.id === id ? { ...x, resolved: true } : x));
+    } catch (err) {
+      console.error(err);
+    }
   };
   return (
     <div className={`cm-comments-panel${open?' cm-comments-panel--open':''}`}>
@@ -255,7 +274,7 @@ function CommentsPanel({ open, onClose }) {
                 {c.resolved && <span className="cm-resolved-badge">Resolved</span>}
               </div>
               <p className="cm-comment-text">{c.text}</p>
-              {!c.resolved && <button className="cm-resolve-btn" onClick={()=>setComments(p=>p.map(x=>x.id===c.id?{...x,resolved:true}:x))}>Resolve</button>}
+              {!c.resolved && <button className="cm-resolve-btn" onClick={() => resolveComment(c.id)}>Resolve</button>}
             </div>
           </div>
         ))}
@@ -310,6 +329,7 @@ function RecentTabs() {
 
 // ─── Share Panel ───────────────────────────────────────────────────────────────
 function SharePanel({ collection, activeCurl, onClose }) {
+  const { mockApiHit } = useMockApi();
   const [scope, setScope]               = useState('collection'); // 'collection' | 'request'
   const [permission, setPermission]     = useState('read-only');  // 'read-only'  | 'read-write'
   const [copied, setCopied]             = useState(false);
@@ -320,7 +340,13 @@ function SharePanel({ collection, activeCurl, onClose }) {
 
   // Stable suffix so the link doesn't change on every render
   const [linkSuffix]  = useState(() => Math.random().toString(36).slice(2, 9));
-  const shareLink = `https://hitit.dev/share/${scope === 'collection' ? 'c' : 'r'}-${permission === 'read-only' ? 'ro' : 'rw'}-${linkSuffix}`;
+  const [shareLink, setShareLink] = useState('');
+
+  useEffect(() => {
+    mockApiHit('POST', '/api/share/link', { scope, permission }).then(() => {
+      setShareLink(`https://hitit.dev/share/${scope === 'collection' ? 'c' : 'r'}-${permission === 'read-only' ? 'ro' : 'rw'}-${linkSuffix}`);
+    }).catch(console.error);
+  }, [scope, permission, linkSuffix, mockApiHit]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(shareLink).catch(() => {});
@@ -328,12 +354,37 @@ function SharePanel({ collection, activeCurl, onClose }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const addInvitee = () => {
+  const addInvitee = async () => {
     const email = emailDraft.trim();
     if (!email) return;
-    const name = email.split('@')[0];
-    setInvitees(p => [...p, { id: Date.now(), name, initial: name[0].toUpperCase(), email, permission: invPerm }]);
-    setEmailDraft('');
+    try {
+      const name = email.split('@')[0];
+      const newInv = await mockApiHit('POST', `/api/collections/${collection?.id || 0}/collaborators`, {
+        id: Date.now(), name, initial: name[0].toUpperCase(), email, permission: invPerm
+      });
+      setInvitees(p => [...p, newInv]);
+      setEmailDraft('');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const removeInvitee = async (id) => {
+    try {
+      await mockApiHit('DELETE', `/api/collaborators/${id}`);
+      setInvitees(p => p.filter(i => i.id !== id));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const changeInviteePerm = async (id, perm) => {
+    try {
+      await mockApiHit('PATCH', `/api/collaborators/${id}`, { permission: perm });
+      setInvitees(p => p.map(i => i.id === id ? { ...i, permission: perm } : i));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   useEffect(() => {
@@ -451,12 +502,12 @@ function SharePanel({ collection, activeCurl, onClose }) {
               <select
                 className="cm-share-inv-select cm-share-inv-select--inline"
                 value={inv.permission}
-                onChange={e => setInvitees(p => p.map(i => i.id === inv.id ? { ...i, permission: e.target.value } : i))}
+                onChange={e => changeInviteePerm(inv.id, e.target.value)}
               >
                 <option value="read-only">Read Only</option>
                 <option value="read-write">Read / Write</option>
               </select>
-              <button className="cm-share-collab-remove" onClick={() => setInvitees(p => p.filter(i => i.id !== inv.id))}>
+              <button className="cm-share-collab-remove" onClick={() => removeInvitee(inv.id)}>
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 1l8 8M9 1L1 9"/></svg>
               </button>
             </div>
@@ -575,6 +626,7 @@ function DiffView({ saveA, saveB, onClear }) {
 
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 export default function CollectionModal({ collection, onClose, globals = [], setGlobals = () => {}, onCustomize }) {
+  const { mockApiHit } = useMockApi();
   // Each collection owns its own requests — seed from collection.requests (future: from API)
   const [curls, setCurls] = useState(() => collection?.requests || []);
 
@@ -606,13 +658,19 @@ export default function CollectionModal({ collection, onClose, globals = [], set
   const nameInputRef                          = useRef(null);
   const [favCurls, setFavCurls]               = useState(() => new Set());
 
-  const toggleFavCurl = useCallback((id) => {
-    setFavCurls(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }, []);
+  const toggleFavCurl = useCallback(async (id) => {
+    const isFav = favCurls.has(id);
+    try {
+      await mockApiHit('PATCH', `/api/requests/${id}/favorite`, { favorite: !isFav });
+      setFavCurls(prev => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  }, [favCurls, mockApiHit]);
 
   // ── KV state for the active request — seeded from the request's own data
   const initKV = useCallback((curl) => ({
@@ -665,34 +723,50 @@ export default function CollectionModal({ collection, onClose, globals = [], set
     setResponseView('response');
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     setLoading(true); setResponse('');
-    setTimeout(() => { setLoading(false); setResponse(MOCK_RESPONSE); }, 900);
+    try {
+      const resData = await mockApiHit('POST', '/api/proxy', MOCK_RESPONSE);
+      setResponse(resData);
+    } catch (err) {
+      setResponse(`Error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
-  const handleSaveResponse = () => {
+  const handleSaveResponse = async () => {
     if (!response) return;
-    const newSave = {
-      id: Date.now(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      date: new Date().toLocaleDateString([], { month: 'short', day: 'numeric' }),
-      response,
-      reqName: activeCurl.name,
-    };
-    setSavedResponses(prev => ({
-      ...prev,
-      [activeCurl.id]: [newSave, ...(prev[activeCurl.id] || [])].slice(0, 20),
-    }));
-    setResponseSaved(true);
-    setSaveListOpen(true);
-    setTimeout(() => setResponseSaved(false), 2200);
+    try {
+      const newSave = await mockApiHit('POST', `/api/requests/${activeCurl.id}/saves`, {
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        date: new Date().toLocaleDateString([], { month: 'short', day: 'numeric' }),
+        response,
+        reqName: activeCurl.name,
+      });
+      setSavedResponses(prev => ({
+        ...prev,
+        [activeCurl.id]: [newSave, ...(prev[activeCurl.id] || [])].slice(0, 20),
+      }));
+      setResponseSaved(true);
+      setSaveListOpen(true);
+      setTimeout(() => setResponseSaved(false), 2200);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleDeleteSave = (saveId) => {
-    setSavedResponses(prev => ({
-      ...prev,
-      [activeCurl.id]: (prev[activeCurl.id] || []).filter(s => s.id !== saveId),
-    }));
-    setCompareSelections(prev => prev.filter(s => s.id !== saveId));
+  const handleDeleteSave = async (saveId) => {
+    try {
+      await mockApiHit('DELETE', `/api/requests/${activeCurl.id}/saves/${saveId}`);
+      setSavedResponses(prev => ({
+        ...prev,
+        [activeCurl.id]: (prev[activeCurl.id] || []).filter(s => s.id !== saveId),
+      }));
+      setCompareSelections(prev => prev.filter(s => s.id !== saveId));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleRecentEnter = () => { clearTimeout(recentTimer.current); setRecentHover(true); };
@@ -729,25 +803,57 @@ export default function CollectionModal({ collection, onClose, globals = [], set
   const curData = activeCurl || {};
 
   // ── Add new blank request ──
-  const handleRenameRequest = (id, newName) => {
-    setCurls(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c));
-    if (activeCurl?.id === id) setActiveCurl(prev => ({ ...prev, name: newName }));
+  const handleRenameRequest = async (id, newName) => {
+    try {
+      await mockApiHit('PATCH', `/api/collections/${collection.id}/requests/${id}`, { name: newName });
+      setCurls(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c));
+      if (activeCurl?.id === id) setActiveCurl(prev => ({ ...prev, name: newName }));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const addNewRequest = () => {
-    const newReq = {
-      id: Date.now(),
-      name: `Request ${curls.length + 1}`,
-      method: 'GET', url: '',
-      headers: [], params: [], body: '', auth: 'No Auth', token: '',
-    };
-    setCurls(prev => [...prev, newReq]);
-    setCurlPanelOpen(true);
-    setActiveCurl(newReq);
-    setUrl(''); setMethod('GET');
-    setKvState({ headers: [], params: [] });
-    setResponse(''); setResponseView('response');
-    setCompareSelections([]); setSaveListOpen(false);
+  const addNewRequest = async () => {
+    try {
+      const newReq = await mockApiHit('POST', `/api/collections/${collection.id}/requests`, {
+        id: Date.now(),
+        name: `Request ${curls.length + 1}`,
+        method: 'GET', url: '',
+        headers: [], params: [], body: '', auth: 'No Auth', token: '',
+      });
+      setCurls(prev => [...prev, newReq]);
+      setCurlPanelOpen(true);
+      setActiveCurl(newReq);
+      setUrl(''); setMethod('GET');
+      setKvState({ headers: [], params: [] });
+      setResponse(''); setResponseView('response');
+      setCompareSelections([]); setSaveListOpen(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const saveCollectionName = async () => {
+    if (collName.trim() === collection.name) {
+      setEditingName(false); return;
+    }
+    try {
+      await mockApiHit('PATCH', `/api/collections/${collection.id}`, { name: collName.trim() });
+      setEditingName(false);
+    } catch (err) {
+      console.error(err);
+      setCollName(collection.name);
+      setEditingName(false);
+    }
+  };
+
+  const saveCollectionNote = async () => {
+    try {
+      await mockApiHit('PATCH', `/api/collections/${collection.id}/note`, { note: collComment });
+      setCollComment('');
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -770,8 +876,8 @@ export default function CollectionModal({ collection, onClose, globals = [], set
                   className="cm-modal-collection-name-input"
                   value={collName}
                   onChange={e => setCollName(e.target.value)}
-                  onBlur={() => setEditingName(false)}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingName(false); }}
+                  onBlur={saveCollectionName}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') saveCollectionName(); }}
                 />
               ) : (
                 <span
@@ -1107,13 +1213,13 @@ export default function CollectionModal({ collection, onClose, globals = [], set
                 <path d="M11 1H2a1 1 0 00-1 1v6a1 1 0 001 1h2l2.5 2.5L9 9h2a1 1 0 001-1V2a1 1 0 00-1-1z"/>
               </svg>
               <input className="cm-coll-comment-input" placeholder="Add a note to this collection…" value={collComment} onChange={e=>setCollComment(e.target.value)}/>
-              {collComment&&<button className="cm-coll-comment-save" onClick={()=>setCollComment('')}>Save</button>}
+              {collComment&&<button className="cm-coll-comment-save" onClick={saveCollectionNote}>Save</button>}
             </div>
             </> )}
           </div>
 
           {/* Comments panel */}
-          <CommentsPanel open={commentsPanelOpen} onClose={()=>setCommentsPanelOpen(false)}/>
+          <CommentsPanel open={commentsPanelOpen} onClose={()=>setCommentsPanelOpen(false)} collectionId={collection?.id} />
         </div>
 
         {/* Recent hover strip */}

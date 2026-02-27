@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import CollectionModal from '../components/CollectionModal';
 import NewCollectionModal from '../components/NewCollectionModal';
+import { useMockApi } from '../components/MockApiProvider';
 import './HomePage.css';
 
 // ─── Initial Data (now lives in state so it's mutable) ────────────────────────
@@ -327,6 +328,7 @@ function Sidebar({ user, onLogout }) {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function HomePage({ user, onLogout }) {
+  const { mockApiHit } = useMockApi();
   const [collections, setCollections]         = useState(INITIAL_COLLECTIONS);
   const [search, setSearch]                   = useState('');
   const [sort, setSort]                       = useState('Last Modified');
@@ -338,12 +340,18 @@ export default function HomePage({ user, onLogout }) {
   const [newCollOpen, setNewCollOpen]         = useState(false);
   const [editingColl, setEditingColl]         = useState(null); // null = create, obj = edit
 
-  const toggleFavCollection = (id) => {
-    setFavCollections(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const toggleFavCollection = async (id) => {
+    const isFav = favCollections.has(id);
+    try {
+      await mockApiHit('PATCH', `/api/collections/${id}/favorite`, { favorite: !isFav });
+      setFavCollections(prev => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+      });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const filtered = useMemo(() => {
@@ -377,22 +385,36 @@ export default function HomePage({ user, onLogout }) {
     setNewCollOpen(true);
   };
 
-  const handleSaveCollection = (collection, isEdit) => {
-    if (isEdit) {
-      // Update existing
-      setCollections(prev => prev.map(c => c.id === collection.id ? collection : c));
-      // If the currently-open modal is this one, sync its display
-      if (selectedCollection?.id === collection.id) setSelectedCollection(collection);
-    } else {
-      // Add new and open it immediately
-      setCollections(prev => [collection, ...prev]);
-      setSelectedCollection(collection);
+  const handleSaveCollection = async (collection, isEdit) => {
+    try {
+      const savedCollection = await mockApiHit(
+        isEdit ? 'PUT' : 'POST',
+        `/api/collections${isEdit ? `/${collection.id}` : ''}`,
+        collection
+      );
+      if (isEdit) {
+        // Update existing
+        setCollections(prev => prev.map(c => c.id === savedCollection.id ? savedCollection : c));
+        // If the currently-open modal is this one, sync its display
+        if (selectedCollection?.id === savedCollection.id) setSelectedCollection(savedCollection);
+      } else {
+        // Add new and open it immediately
+        setCollections(prev => [savedCollection, ...prev]);
+        setSelectedCollection(savedCollection);
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  const handleDeleteCollection = (id) => {
-    setCollections(prev => prev.filter(c => c.id !== id));
-    if (selectedCollection?.id === id) setSelectedCollection(null);
+  const handleDeleteCollection = async (id) => {
+    try {
+      await mockApiHit('DELETE', `/api/collections/${id}`);
+      setCollections(prev => prev.filter(c => c.id !== id));
+      if (selectedCollection?.id === id) setSelectedCollection(null);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -487,7 +509,14 @@ export default function HomePage({ user, onLogout }) {
               key={c.id}
               collection={c}
               style={{ animationDelay: `${i * 0.05}s` }}
-              onClick={() => setSelectedCollection(c)}
+              onClick={async () => {
+                try {
+                  const fullCollection = await mockApiHit('GET', `/api/collections/${c.id}`, c);
+                  setSelectedCollection(fullCollection);
+                } catch (err) {
+                  console.error(err);
+                }
+              }}
               onCustomize={() => openCustomizeModal(c)}
               onDelete={() => handleDeleteCollection(c.id)}
               isFav={favCollections.has(c.id)}

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useMockApi } from './MockApiProvider';
 import './GlobalStore.css';
 
 // ─── Initial Data ─────────────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ const COLLECTION_OVERRIDES = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function maskSecret(val) {
   if (!val) return '';
+  if (val.length <= 4) return '•'.repeat(val.length);
   return val.slice(0, 4) + '•'.repeat(Math.min(val.length - 4, 16));
 }
 
@@ -308,8 +310,9 @@ function AddVarForm({ envs, categories, onAdd, onClose }) {
   );
 }
 
-// ─── Main GlobalStore Panel ───────────────────────────────────────────────────
+// ─── Main Global Store Panel ───────────────────────────────────────────────────
 export default function GlobalStore({ collectionName, onClose }) {
+  const { mockApiHit } = useMockApi();
   const [vars, setVars]               = useState(INITIAL_VARS);
   const [envs]                        = useState(INITIAL_ENVS);
   const [categories, setCategories]   = useState(INITIAL_CATEGORIES);
@@ -377,18 +380,38 @@ export default function GlobalStore({ collectionName, onClose }) {
   const uncategorized = filtered.filter(v => !categories.find(c => c.id === v.category));
   if (uncategorized.length) grouped.push({ cat: { id:'_', label:'Uncategorized', color:'#8b80a8' }, items: uncategorized });
 
-  const updateVar = (id, updated) => setVars(p => p.map(v => v.id===id ? updated : v));
-  const deleteVar = (id)          => setVars(p => p.filter(v => v.id!==id));
-  const addVar    = (v)           => setVars(p => [...p, v]);
+  const updateVar = async (id, updated) => {
+    try {
+      await mockApiHit('PUT', `/api/globals/${id}`, updated);
+      setVars(p => p.map(v => v.id===id ? updated : v));
+    } catch (err) { console.error(err); }
+  };
+  const deleteVar = async (id) => {
+    try {
+      await mockApiHit('DELETE', `/api/globals/${id}`);
+      setVars(p => p.filter(v => v.id!==id));
+    } catch (err) { console.error(err); }
+  };
+  const addVar = async (v) => {
+    try {
+      const newVar = await mockApiHit('POST', '/api/globals', v);
+      setVars(p => [...p, newVar]);
+    } catch (err) { console.error(err); }
+  };
   const toggleReveal = (id)       => setRevealed(r => ({ ...r, [id]: !r[id] }));
 
-  const addCategory = () => {
+  const addCategory = async () => {
     const label = newCatDraft.trim();
     if (!label) return;
-    const id = label.toLowerCase().replace(/\s+/g,'-');
-    const colors = ['#6366f1','#ec4899','#14b8a6','#f97316','#84cc16'];
-    setCategories(c => [...c, { id, label, color: colors[c.length % colors.length] }]);
-    setNewCatDraft('');
+    try {
+      const id = label.toLowerCase().replace(/\s+/g,'-');
+      const colors = ['#6366f1','#ec4899','#14b8a6','#f97316','#84cc16'];
+      const newCat = await mockApiHit('POST', '/api/globals/categories', { 
+        id, label, color: colors[categories.length % colors.length] 
+      });
+      setCategories(c => [...c, newCat]);
+      setNewCatDraft('');
+    } catch (err) { console.error(err); }
   };
 
   const activeEnvData = envs.find(e => e.id === activeEnv);
@@ -487,7 +510,12 @@ export default function GlobalStore({ collectionName, onClose }) {
                   <div key={c.id} className="gs-cat-editor-row">
                     <EnvDot color={c.color}/>
                     <span className="gs-cat-editor-label">{c.label}</span>
-                    <button className="gs-cat-del" onClick={()=>setCategories(cats=>cats.filter(x=>x.id!==c.id))}>×</button>
+                    <button className="gs-cat-del" onClick={async () => {
+                      try {
+                        await mockApiHit('DELETE', `/api/globals/categories/${c.id}`);
+                        setCategories(cats=>cats.filter(x=>x.id!==c.id));
+                      } catch (err) { console.error(err); }
+                    }}>×</button>
                   </div>
                 ))}
               </div>
