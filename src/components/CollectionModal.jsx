@@ -1,7 +1,7 @@
 import GlobalStore from './GlobalStore';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useMockApi } from './MockApiProvider';
-import { createCollectionRequest, updateCollectionRequest } from '../api/request.api';
+import { createCollectionRequest, updateCollectionRequest, getCollectionRequestsSummary, getRequestDetails } from '../api/request.api';
 import './CollectionModal.css';
 
 // ─── Per-collection request shape (what the backend will return in future) ────
@@ -134,13 +134,19 @@ function CurlPanel({ curls, activeCurl, onSelect, onAdd, onRename, open, globals
         </button>
       </div>
       <div className="cm-curl-list">
-        {curls.length === 0 && (
+        {fetchingSummaries && (
+          <div className="cm-curl-loading" style={{ padding: '20px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+            <div className="cm-spin" style={{ margin: '0 auto 8px', width: '16px', height: '16px', border: '2px solid #3b82f633', borderTopColor: '#3b82f6' }} />
+            Loading requests...
+          </div>
+        )}
+        {!fetchingSummaries && curls.length === 0 && (
           <div className="cm-curl-empty">
             <span>No requests yet</span>
             <button className="cm-curl-empty-add" onClick={onAdd}>+ Add one</button>
           </div>
         )}
-        {curls.map((curl, i) => {
+        {!fetchingSummaries && curls.map((curl, i) => {
           const isFav = favCurls?.has(curl.id);
           return (
             <div
@@ -630,16 +636,56 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   const { mockApiHit } = useMockApi();
   // Each collection owns its own requests — seed from collection.requests (future: from API)
   const [curls, setCurls] = useState(() => collection?.requests || []);
+  const [cachedDetails, setCachedDetails] = useState({}); // Stores full details for previously clicked requests
+  const [fetchingDetails, setFetchingDetails] = useState(false);
+  const [fetchingSummaries, setFetchingSummaries] = useState(false);
+
+  // Fetch summaries dynamically when modal opens
+  useEffect(() => {
+    if (!collection?.id) return;
+    const loadSummaries = async () => {
+      try {
+        setFetchingSummaries(true);
+        const data = await getCollectionRequestsSummary(collection.id);
+        if (Array.isArray(data)) {
+          setCurls(data);
+        } else if (data && Array.isArray(data.data)) {
+          setCurls(data.data); // Backend returns { data: [...] }
+        } else if (data && Array.isArray(data.requests)) {
+          setCurls(data.requests);
+        }
+      } catch (err) {
+        console.error("Failed to fetch request summaries:", err);
+      } finally {
+        setFetchingSummaries(false);
+      }
+    };
+    // Only load from backend if we don't already have them from props
+    // Or if the array is notably empty but the collection might have something
+    if (curls.length === 0) {
+      loadSummaries();
+    }
+  }, [collection?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const firstCurl = curls[0] || null;
 
-  const [curlPanelOpen, setCurlPanelOpen]     = useState(curls.length > 0);
+  const [curlPanelOpen, setCurlPanelOpen]     = useState(true);
   const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
   const [activeCurl, setActiveCurl]           = useState(firstCurl);
   const [activeTab, setActiveTab]             = useState('headers');
   const [url, setUrl]                         = useState(firstCurl?.url    || '');
   const [method, setMethod]                   = useState(firstCurl?.method ?? 'GET');
   const [methodOpen, setMethodOpen]           = useState(false);
+
+  // When curls are loaded lazily, automatically select the first one if we don't have one active
+  useEffect(() => {
+    if (curls.length > 0 && !activeCurl) {
+      const initial = curls[0];
+      handleSelectCurl(initial);
+      setCurlPanelOpen(true);
+    }
+  }, [curls, activeCurl]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [recentHover, setRecentHover]         = useState(false);
   const [loading, setLoading]                 = useState(false);
   const [response, setResponse]               = useState('');
@@ -713,15 +759,47 @@ export default function CollectionModal({ collection, user, onClose, globals = [
     return () => window.removeEventListener('keydown', h);
   }, [onClose]);
 
-  const handleSelectCurl = (curl) => {
+  const handleSelectCurl = async (curl) => {
+    // Optimistically set active so UI reacts
     setActiveCurl(curl);
     setUrl(curl.url || '');
     setMethod(curl.method ?? 'GET');
-    setKvState(initKV(curl));
     setResponse('');
     setSaveListOpen(false);
     setCompareSelections([]);
     setResponseView('response');
+
+    // If we have cached details, restore them instantly!
+    if (cachedDetails[curl.id]) {
+      const full = cachedDetails[curl.id];
+      setActiveCurl(full);
+      setUrl(full.url || '');
+      setKvState(initKV(full));
+      return;
+    }
+
+    // Otherwise, fallback to initial dummy values while loading real ones
+    setKvState(initKV(curl));
+
+    // And make the API call lazily
+    try {
+      setFetchingDetails(true);
+      const fullDetails = await getRequestDetails(curl.id);
+      
+      // Update Cache
+      setCachedDetails(prev => ({ ...prev, [curl.id]: fullDetails }));
+      
+      // Keep UI in sync if the user didn't click away already
+      setActiveCurl(prev => prev.id === curl.id ? fullDetails : prev);
+      if (activeCurl?.id === curl.id || !activeCurl) {
+        setUrl(fullDetails.url || '');
+        setKvState(initKV(fullDetails));
+      }
+    } catch (err) {
+      console.error("Failed to load full request details", err);
+    } finally {
+      setFetchingDetails(false);
+    }
   };
 
   const handleSend = async () => {
@@ -1106,6 +1184,11 @@ export default function CollectionModal({ collection, user, onClose, globals = [
             </div>
 
             {/* Response */}
+            {fetchingDetails && (
+              <div className="cm-loading-overlay-bar" style={{ padding: '4px 16px', background: '#3b82f615', color: '#3b82f6', fontSize: '12px', textAlign: 'center' }}>
+                Fetching request details...
+              </div>
+            )}
             <div className="cm-response-section">
               <div className="cm-response-header">
                 <div className="cm-response-header-left">

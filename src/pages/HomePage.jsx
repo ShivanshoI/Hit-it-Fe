@@ -177,7 +177,7 @@ function CollectionCard({ collection, style, onClick, onCustomize, onDelete, isF
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M2 6h8M6 2v8" strokeLinecap="round"/>
             </svg>
-            {(collection.requests || []).length} requests
+            {collection.total_requests ?? (collection.requests || []).length} requests
           </span>
         </div>
       </div>
@@ -348,7 +348,7 @@ export default function HomePage({ user, onLogout }) {
     switch (sort) {
       case 'Name A–Z': list.sort((a, b) => a.name.localeCompare(b.name)); break;
       case 'Name Z–A': list.sort((a, b) => b.name.localeCompare(a.name)); break;
-      case 'Most Requests': list.sort((a, b) => (b.requests||[]).length - (a.requests||[]).length); break;
+      case 'Most Requests': list.sort((a, b) => (b.total_requests ?? (b.requests || []).length) - (a.total_requests ?? (a.requests || []).length)); break;
       default: list.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
     }
     return list;
@@ -499,13 +499,8 @@ export default function HomePage({ user, onLogout }) {
               key={c.id}
               collection={c}
               style={{ animationDelay: `${i * 0.05}s` }}
-              onClick={async () => {
-                try {
-                  const fullCollection = await getCollection(c.id);
-                  setSelectedCollection(fullCollection || c);
-                } catch (err) {
-                  console.error(err);
-                }
+              onClick={() => {
+                setSelectedCollection(c);
               }}
               onCustomize={() => openCustomizeModal(c)}
               onDelete={() => handleDeleteCollection(c.id)}
