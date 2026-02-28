@@ -556,6 +556,8 @@ export default function HomePage({ user, onLogout }) {
         <CollectionModal
           user={user}
           collection={selectedCollection}
+          collections={collections}
+          onSelectCollection={setSelectedCollection}
           onClose={() => setSelectedCollection(null)}
           onCustomize={() => openCustomizeModal(selectedCollection)}
         />

@@ -104,7 +104,7 @@ function KVRow({ row, sharedSuggestions, onChange, onDelete, onPickShared }) {
 
 // ─── Curl Panel (left sidebar in modal) ──────────────────────────────────────
 // Globals are defined & edited in the dashboard sidebar — read-only reference here
-function CurlPanel({ curls, activeCurl, onSelect, onAdd, onRename, open, globals, favCurls, onToggleFav }) {
+function CurlPanel({ curls, activeCurl, onSelect, onAdd, onRename, open, globals, favCurls, onToggleFav, fetchingSummaries }) {
   const [globalsOpen, setGlobalsOpen] = useState(false);
   const [editingId, setEditingId]     = useState(null);
   const [draftName, setDraftName]     = useState('');
@@ -299,13 +299,29 @@ function CommentsPanel({ open, onClose, collectionId }) {
 }
 
 // ─── Recent Tabs ──────────────────────────────────────────────────────────────
-function RecentTabs() {
+function RecentTabs({ recentCollections = [], onSelectCollection }) {
   const [sort, setSort] = useState('Last Opened');
   const [sortOpen, setSortOpen] = useState(false);
+
+  // Compute the recent collections list using the passed collections 
+  const displayCollections = useMemo(() => {
+    let list = [...recentCollections];
+    
+    // Sort logic 
+    if (sort === 'Name A–Z') {
+      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    } else {
+      // Default / Last Opened - falling back to updated_at for now since we don't have true last_opened tracking via API yet
+      list.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+    }
+    
+    return list.slice(0, 5); // Only show top 5
+  }, [recentCollections, sort]);
+
   return (
     <div className="cm-recent-strip">
       <div className="cm-recent-header">
-        <span className="cm-recent-title">Recent</span>
+        <span className="cm-recent-title">Recent Collections</span>
         <div className="cm-recent-sort-wrap">
           <button className="cm-recent-sort-btn" onClick={()=>setSortOpen(!sortOpen)}>
             {sort}
@@ -313,7 +329,7 @@ function RecentTabs() {
           </button>
           {sortOpen && (
             <div className="cm-recent-dropdown">
-              {RECENT_SORT.map(opt=>(
+              {['Last Opened', 'Name A–Z'].map(opt=>(
                 <button key={opt} className={`cm-recent-opt${sort===opt?' active':''}`} onClick={()=>{setSort(opt);setSortOpen(false);}}>{opt}</button>
               ))}
             </div>
@@ -321,11 +337,11 @@ function RecentTabs() {
         </div>
       </div>
       <div className="cm-recent-tabs">
-        {MOCK_RECENT.map(r=>(
-          <button key={r.id} className="cm-recent-tab" style={{'--col':r.color}}>
-            <span className="cm-recent-dot" style={{background:r.color}}/>
-            <span className="cm-recent-tab-name">{r.name}</span>
-            <MethodBadge method={r.method} small/>
+        {displayCollections.map(r=>(
+          <button key={r.id} className="cm-recent-tab" style={{'--col':r.accent_color || '#7c3aed'}} onClick={() => onSelectCollection?.(r)}>
+            <span className="cm-recent-dot" style={{background:r.accent_color || '#7c3aed'}}/>
+            <span className="cm-recent-tab-name">{r.name || 'Untitled'}</span>
+            <MethodBadge method={r.default_method || 'GET'} small/>
           </button>
         ))}
       </div>
@@ -632,7 +648,7 @@ function DiffView({ saveA, saveB, onClear }) {
 }
 
 // ─── Main Modal ───────────────────────────────────────────────────────────────
-export default function CollectionModal({ collection, user, onClose, globals = [], setGlobals = () => {}, onCustomize }) {
+export default function CollectionModal({ collection, user, onClose, globals = [], setGlobals = () => {}, onCustomize, collections = [], onSelectCollection }) {
   const { mockApiHit } = useMockApi();
   // Each collection owns its own requests — seed from collection.requests (future: from API)
   const [curls, setCurls] = useState(() => collection?.requests || []);
@@ -640,9 +656,19 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   const [fetchingDetails, setFetchingDetails] = useState(false);
   const [fetchingSummaries, setFetchingSummaries] = useState(false);
 
-  // Fetch summaries dynamically when modal opens
+  // Fetch summaries dynamically when modal opens or collection changes
   useEffect(() => {
     if (!collection?.id) return;
+    
+    // Reset state for new collection before fetching
+    setCurls(collection.requests || []);
+    setCollName(collection.name || 'Untitled Collection');
+    setCollComment('');
+    setActiveCurl(null);
+    setResponse('');
+    setCompareSelections([]);
+    setSaveListOpen(false);
+
     const loadSummaries = async () => {
       try {
         setFetchingSummaries(true);
@@ -660,11 +686,8 @@ export default function CollectionModal({ collection, user, onClose, globals = [
         setFetchingSummaries(false);
       }
     };
-    // Only load from backend if we don't already have them from props
-    // Or if the array is notably empty but the collection might have something
-    if (curls.length === 0) {
-      loadSummaries();
-    }
+    
+    loadSummaries();
   }, [collection?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const firstCurl = curls[0] || null;
@@ -1020,6 +1043,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
             globals={globals}
             favCurls={favCurls}
             onToggleFav={toggleFavCurl}
+            fetchingSummaries={fetchingSummaries}
           />
 
           {/* Workspace */}
@@ -1321,7 +1345,20 @@ export default function CollectionModal({ collection, user, onClose, globals = [
 
         {/* Recent hover strip */}
         <div className="cm-recent-trigger" onMouseEnter={handleRecentEnter} onMouseLeave={handleRecentLeave}>
-          <div className={`cm-recent-peek${recentHover?' cm-recent-peek--open':''}`}><RecentTabs/></div>
+          <div className={`cm-recent-peek${recentHover?' cm-recent-peek--open':''}`}>
+            <RecentTabs 
+              recentCollections={collections} 
+              onSelectCollection={(c) => { 
+                if (onSelectCollection) {
+                   onSelectCollection(c);
+                } else {
+                   // Fallback if not provided
+                   onClose(); 
+                   setTimeout(() => document.querySelector(`.hc-card[style*="${c.id}"]`)?.click(), 100); 
+                }
+              }} 
+            />
+          </div>
           <div className="cm-recent-handle">
             <svg width="16" height="8" viewBox="0 0 16 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
               <path d={recentHover?"M2 6l6-4 6 4":"M2 2l6 4 6-4"}/>
