@@ -1,7 +1,7 @@
 import GlobalStore from './GlobalStore';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useMockApi } from './MockApiProvider';
-import { createCollectionRequest, updateCollectionRequest, getCollectionRequestsSummary, getRequestDetails } from '../api/request.api';
+import { createCollectionRequest, updateCollectionRequest, getCollectionRequestsSummary, getRequestDetails, updateRequestNote } from '../api/request.api';
 import './CollectionModal.css';
 
 // ─── Per-collection request shape (what the backend will return in future) ────
@@ -670,7 +670,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
     // Reset state for new collection before fetching
     setCurls(collection.requests || []);
     setCollName(collection.name || 'Untitled Collection');
-    setCollComment('');
+    setRequestNote('');
     setActiveCurl(null);
     setShadowHistory([]);
     setResponse('');
@@ -728,7 +728,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   const [responseView, setResponseView]       = useState('response');
   const [shareOpen, setShareOpen]             = useState(false);
   const shareRef                              = useRef(null);
-  const [collComment, setCollComment]         = useState('');
+  const [requestNote, setRequestNote]         = useState('');
   const [globalStoreOpen, setGlobalStoreOpen] = useState(false);
   const recentTimer                           = useRef(null);
   const [editingName, setEditingName]         = useState(false);
@@ -837,10 +837,10 @@ export default function CollectionModal({ collection, user, onClose, globals = [
       });
     }
 
-    // Optimistically set active so UI reacts
     setActiveCurl(curl);
     setUrl(curl.url || '');
     setMethod(curl.method ?? 'GET');
+    setRequestNote(curl.note || '');
     setResponse('');
     setSaveListOpen(false);
     setCompareSelections([]);
@@ -851,6 +851,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
       const full = cachedDetails[curl.id];
       setActiveCurl(full);
       setUrl(full.url || '');
+      setRequestNote(full.note || '');
       setKvState(initKV(full));
       return;
     }
@@ -870,6 +871,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
       setActiveCurl(prev => prev.id === curl.id ? fullDetails : prev);
       if (activeCurl?.id === curl.id || !activeCurl) {
         setUrl(fullDetails.url || '');
+        setRequestNote(fullDetails.note || '');
         setKvState(initKV(fullDetails));
       }
     } catch (err) {
@@ -1035,12 +1037,18 @@ export default function CollectionModal({ collection, user, onClose, globals = [
     }
   };
 
-  const saveCollectionNote = async () => {
+  const saveRequestNote = async () => {
     try {
-      await mockApiHit('PATCH', `/api/collections/${collection.id}/note`, { note: collComment });
-      setCollComment('');
+      if (!activeCurl) return;
+      await updateRequestNote(activeCurl.id, requestNote);
+      setActiveCurl(prev => prev ? ({ ...prev, note: requestNote }) : prev);
+      setCachedDetails(prev => ({
+        ...prev,
+        [activeCurl.id]: prev[activeCurl.id] ? { ...prev[activeCurl.id], note: requestNote } : { note: requestNote }
+      }));
+      setCurls(prev => prev.map(c => c.id === activeCurl.id ? { ...c, note: requestNote } : c));
     } catch (err) {
-      console.error(err);
+      console.error('Failed to save request note:', err);
     }
   };
 
@@ -1433,13 +1441,13 @@ export default function CollectionModal({ collection, user, onClose, globals = [
               </div>
             </div>
 
-            {/* Collection note */}
+            {/* Request note */}
             <div className="cm-coll-comment">
               <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M11 1H2a1 1 0 00-1 1v6a1 1 0 001 1h2l2.5 2.5L9 9h2a1 1 0 001-1V2a1 1 0 00-1-1z"/>
               </svg>
-              <input className="cm-coll-comment-input" placeholder="Add a note to this collection…" value={collComment} onChange={e=>setCollComment(e.target.value)}/>
-              {collComment&&<button className="cm-coll-comment-save" onClick={saveCollectionNote}>Save</button>}
+              <input className="cm-coll-comment-input" placeholder="Add a note to this request…" value={requestNote} onChange={e=>setRequestNote(e.target.value)}/>
+              {requestNote !== (activeCurl?.note || '') && <button className="cm-coll-comment-save" onClick={saveRequestNote}>Save</button>}
             </div>
             </> )}
           </div>

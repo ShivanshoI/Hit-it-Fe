@@ -49,3 +49,12 @@ export async function getRequestDetails(requestId) {
   });
   return body.data;
 }
+
+export async function updateRequestNote(requestId, note) {
+  const body = await apiClient(`/api/requests/${requestId}/modify/note`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify({ note }),
+  });
+  return body.data;
+}
