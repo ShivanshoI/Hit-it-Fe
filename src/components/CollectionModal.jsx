@@ -104,7 +104,7 @@ function KVRow({ row, sharedSuggestions, onChange, onDelete, onPickShared }) {
 
 // ─── Curl Panel (left sidebar in modal) ──────────────────────────────────────
 // Globals are defined & edited in the dashboard sidebar — read-only reference here
-function CurlPanel({ curls, activeCurl, onSelect, onAdd, onRename, open, globals, favCurls, onToggleFav, fetchingSummaries }) {
+function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename, open, globals, favCurls, onToggleFav, fetchingSummaries }) {
   const [globalsOpen, setGlobalsOpen] = useState(false);
   const [editingId, setEditingId]     = useState(null);
   const [draftName, setDraftName]     = useState('');
@@ -148,12 +148,18 @@ function CurlPanel({ curls, activeCurl, onSelect, onAdd, onRename, open, globals
         )}
         {!fetchingSummaries && curls.map((curl, i) => {
           const isFav = favCurls?.has(curl.id);
+          const isShadow = shadowHistory?.find(s => s.id === curl.id);
+          const shadowIdx = shadowHistory?.findIndex(s => s.id === curl.id);
+          const shadowOpacities = [0.15, 0.08]; // Shadow 1 (recent), Shadow 2 (older)
+          const shadowStyle = isShadow ? { backgroundColor: `rgba(59, 130, 246, ${shadowOpacities[shadowIdx] || 0.05})`, borderLeft: `2px solid rgba(59, 130, 246, ${shadowOpacities[shadowIdx] * 3})` } : {};
+
           return (
             <div
               key={curl.id}
-              className={`cm-curl-item${activeCurl?.id===curl.id?' active':''}${isFav?' cm-curl-item--fav':''}`}
-              style={{ animationDelay: open ? `${i*0.04}s` : '0s' }}
+              className={`cm-curl-item${activeCurl?.id===curl.id?' active':''}${isFav?' cm-curl-item--fav':''}${isShadow?' cm-curl-item--shadow':''}`}
+              style={{ animationDelay: open ? `${i*0.04}s` : '0s', ...shadowStyle }}
               onClick={() => editingId !== curl.id && onSelect(curl)}
+              title={isShadow ? `Shadow memory #${shadowIdx+1}` : ''}
             >
               <MethodBadge method={curl.method} small />
               {editingId === curl.id ? (
@@ -655,6 +661,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   const [cachedDetails, setCachedDetails] = useState({}); // Stores full details for previously clicked requests
   const [fetchingDetails, setFetchingDetails] = useState(false);
   const [fetchingSummaries, setFetchingSummaries] = useState(false);
+  const [shadowHistory, setShadowHistory] = useState([]); // Array of previous 2 activeCurls for ghosting
 
   // Fetch summaries dynamically when modal opens or collection changes
   useEffect(() => {
@@ -665,6 +672,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
     setCollName(collection.name || 'Untitled Collection');
     setCollComment('');
     setActiveCurl(null);
+    setShadowHistory([]);
     setResponse('');
     setCompareSelections([]);
     setSaveListOpen(false);
@@ -775,18 +783,26 @@ export default function CollectionModal({ collection, user, onClose, globals = [
 
   const [kvState, setKvState] = useState(() => initKV(firstCurl));
 
-  // Shared header/param suggestions from other requests in the same collection
+  // Extract ghost configuration parameters directly out of shadowHistory instead of across all collection queries
   const sharedHeaders = useMemo(() => {
     const seen = new Map();
-    curls.forEach(c => c.id !== activeCurl?.id && (c.headers || []).forEach(h => { if (h.k && !seen.has(h.k)) seen.set(h.k, h.v); }));
+    [...shadowHistory].reverse().forEach(c => (c.headers || []).forEach(h => { 
+      const hk = h.key !== undefined ? h.key : h.k;
+      const hv = h.value !== undefined ? h.value : h.v;
+      if (hk && !seen.has(hk)) seen.set(hk, hv); 
+    }));
     return [...seen.entries()].map(([k, v]) => ({ k, v })).filter(s => !kvState.headers.some(h => h.k === s.k));
-  }, [curls, activeCurl, kvState.headers]);
+  }, [shadowHistory, kvState.headers]);
 
   const sharedParams = useMemo(() => {
     const seen = new Map();
-    curls.forEach(c => c.id !== activeCurl?.id && (c.params || []).forEach(p => { if (p.k && !seen.has(p.k)) seen.set(p.k, p.v); }));
+    [...shadowHistory].reverse().forEach(c => (c.params || []).forEach(p => { 
+      const pk = p.key !== undefined ? p.key : p.k;
+      const pv = p.value !== undefined ? p.value : p.v;
+      if (pk && !seen.has(pk)) seen.set(pk, pv); 
+    }));
     return [...seen.entries()].map(([k, v]) => ({ k, v })).filter(s => !kvState.params.some(p => p.k === s.k));
-  }, [curls, activeCurl, kvState.params]);
+  }, [shadowHistory, kvState.params]);
 
   const updateHeader = (i, val) => setKvState(prev => ({ ...prev, headers: prev.headers.map((h,j)=>j===i?val:h) }));
   const deleteHeader = (i)      => setKvState(prev => ({ ...prev, headers: prev.headers.filter((_,j)=>j!==i) }));
@@ -808,6 +824,19 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   }, [onClose]);
 
   const handleSelectCurl = async (curl) => {
+    // Check if clicking same
+    if (activeCurl?.id === curl.id) return;
+
+    // Track shadow history
+    if (activeCurl) {
+      setShadowHistory(prev => {
+        // Exclude the one we are moving TO just in case it was a shadow
+        const filtered = prev.filter(c => c.id !== curl.id && c.id !== activeCurl.id);
+        // Prepend current active memory, keep max 2
+        return [activeCurl, ...filtered].slice(0, 2);
+      });
+    }
+
     // Optimistically set active so UI reacts
     setActiveCurl(curl);
     setUrl(curl.url || '');
@@ -1093,6 +1122,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
           <CurlPanel
             curls={curls}
             activeCurl={activeCurl}
+            shadowHistory={shadowHistory}
             onSelect={handleSelectCurl}
             onAdd={addNewRequest}
             onRename={handleRenameRequest}
@@ -1178,11 +1208,11 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                   ))}
                   <button className="cm-kv-add" onClick={addHeader}>+ Add header</button>
                   {sharedHeaders.length>0 && (
-                    <div className="cm-shared-banner">
+                    <div className="cm-shared-banner" style={{ background: 'rgba(59, 130, 246, 0.08)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
                       <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                        <circle cx="5.5" cy="5.5" r="4.5"/><path d="M5.5 4v2.5M5.5 8h.01"/>
+                        <path d="M5.5 1v9M1 5.5l9 0z"/>
                       </svg>
-                      {sharedHeaders.length} header{sharedHeaders.length!==1?'s':''} available from other requests — focus an empty row to import
+                      {sharedHeaders.length} header{sharedHeaders.length!==1?'s':''} inherited from Shadow History. Focus an empty row to use them.
                     </div>
                   )}
                 </div>
@@ -1202,11 +1232,11 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                   ))}
                   <button className="cm-kv-add" onClick={addParam}>+ Add param</button>
                   {sharedParams.length>0 && (
-                    <div className="cm-shared-banner">
+                    <div className="cm-shared-banner" style={{ background: 'rgba(59, 130, 246, 0.08)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
                       <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                        <circle cx="5.5" cy="5.5" r="4.5"/><path d="M5.5 4v2.5M5.5 8h.01"/>
+                        <path d="M5.5 1v9M1 5.5l9 0z"/>
                       </svg>
-                      {sharedParams.length} param{sharedParams.length!==1?'s':''} available from other requests — focus an empty row to import
+                      {sharedParams.length} param{sharedParams.length!==1?'s':''} inherited from Shadow History. Focus an empty row to use them.
                     </div>
                   )}
                 </div>
