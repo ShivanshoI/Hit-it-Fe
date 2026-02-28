@@ -15,11 +15,11 @@ export async function createCollectionRequest(payload) {
 
 /**
  * Update a request
- * PATCH /api/requests/:id
+ * PUT /api/requests/:id
  */
 export async function updateCollectionRequest(requestId, payload) {
   const body = await apiClient(`/api/requests/${requestId}`, {
-    method: 'PATCH',
+    method: 'PUT',
     auth: true,
     body: JSON.stringify(payload),
   });

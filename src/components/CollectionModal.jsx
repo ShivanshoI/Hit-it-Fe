@@ -743,10 +743,35 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   }, [favCurls, mockApiHit]);
 
   // ── KV state for the active request — seeded from the request's own data
-  const initKV = useCallback((curl) => ({
-    headers: (curl?.headers || []).map(h => ({ ...h })),
-    params:  (curl?.params  || []).map(p => ({ ...p })),
-  }), []);
+  const initKV = useCallback((curl) => {
+    // Backend sends {key, value} or 'Bearer auth_string'
+    // UI expects {k, v} and sepearate auth type and token
+    let authType = 'No Auth';
+    let tokenStr = curl?.token || '';
+    
+    if (curl?.auth) {
+      if (curl.auth.startsWith('Bearer ')) {
+        authType = 'Bearer Token';
+        tokenStr = curl.auth.slice(7);
+      } else if (curl.auth.startsWith('Basic ')) {
+        authType = 'Basic Auth';
+        tokenStr = curl.auth.slice(6);
+      } else if (curl.auth !== 'No Auth' && curl.auth !== '') {
+        authType = 'API Key';
+        tokenStr = curl.auth;
+      }
+    } else {
+      authType = curl?.auth || 'No Auth';
+    }
+
+    return {
+      headers: (curl?.headers || []).map(h => ({ k: h.key !== undefined ? h.key : h.k, v: h.value !== undefined ? h.value : h.v })),
+      params:  (curl?.params  || []).map(p => ({ k: p.key !== undefined ? p.key : p.k, v: p.value !== undefined ? p.value : p.v })),
+      body:    curl?.body || '',
+      auth:    authType,
+      token:   tokenStr,
+    };
+  }, []);
 
   const [kvState, setKvState] = useState(() => initKV(firstCurl));
 
@@ -827,6 +852,38 @@ export default function CollectionModal({ collection, user, onClose, globals = [
 
   const handleSend = async () => {
     setLoading(true); setResponse('');
+    
+    // Auto-save request details to backend before sending
+    try {
+      if (activeCurl?.id) {
+        let authString = kvState.auth === 'Bearer Token' ? `Bearer ${kvState.token}` : 
+                         kvState.auth === 'Basic Auth' ? `Basic ${kvState.token}` :
+                         kvState.token;
+                         
+        if (kvState.auth === 'No Auth' || !kvState.token) {
+          authString = '';
+        }
+
+        const payload = {
+          name: activeCurl.name,
+          url,
+          method,
+          headers: kvState.headers.filter(h => h.k || h.v).map(h => ({ key: h.k, value: h.v })),
+          params: kvState.params.filter(p => p.k || p.v).map(p => ({ key: p.k, value: p.v })),
+          body: kvState.body,
+          auth: authString
+        };
+        const updatedReq = await updateCollectionRequest(activeCurl.id, payload);
+        
+        // Update local state
+        setActiveCurl(updatedReq);
+        setCurls(prev => prev.map(c => c.id === activeCurl.id ? { ...c, ...updatedReq } : c));
+        setCachedDetails(prev => ({ ...prev, [activeCurl.id]: updatedReq }));
+      }
+    } catch (err) {
+      console.error("Failed to sync request changes to backend before sending", err);
+    }
+
     try {
       const resData = await mockApiHit('POST', '/api/proxy', MOCK_RESPONSE);
       setResponse(resData);
@@ -1162,7 +1219,12 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                     <span className="cm-editor-label">Request Body</span>
                     <span className="cm-editor-type">JSON</span>
                   </div>
-                  <textarea className="cm-editor" defaultValue={curData?.body||''} spellCheck={false}/>
+                  <textarea 
+                    className="cm-editor" 
+                    value={kvState.body} 
+                    onChange={e => setKvState(prev => ({ ...prev, body: e.target.value }))}
+                    spellCheck={false}
+                  />
                 </div>
               )}
 
@@ -1171,18 +1233,31 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                 <div className="cm-auth-panel">
                   <div className="cm-auth-type">
                     <span className="cm-auth-label">Type</span>
-                    <select className="cm-auth-select" defaultValue={curData?.auth}>
+                    <select 
+                      className="cm-auth-select" 
+                      value={kvState.auth}
+                      onChange={e => setKvState(prev => ({ ...prev, auth: e.target.value }))}
+                    >
                       <option>Bearer Token</option><option>Basic Auth</option><option>API Key</option><option>OAuth 2.0</option><option>No Auth</option>
                     </select>
                   </div>
                   <div className="cm-kv-row" style={{marginTop:'1rem'}}>
                     <span className="cm-auth-label" style={{width:60,flexShrink:0}}>Token</span>
                     <div style={{position:'relative',flex:1}}>
-                      <input className="cm-kv-input" style={{width:'100%'}} defaultValue={curData?.token}/>
+                      <input 
+                        className="cm-kv-input" 
+                        style={{width:'100%'}} 
+                        value={kvState.token}
+                        onChange={e => setKvState(prev => ({ ...prev, token: e.target.value }))}
+                      />
                       {globals.length>0 && (
                         <div className="cm-auth-globals-hint">
                           Available globals: {globals.map(g=>(
-                            <button key={g.id} className="cm-auth-global-chip" onClick={e=>{e.currentTarget.closest('.cm-auth-panel').querySelector('input').value=`{{${g.key}}}`}}>
+                            <button 
+                              key={g.id} 
+                              className="cm-auth-global-chip" 
+                              onClick={e => setKvState(prev => ({ ...prev, token: `{{${g.key}}}` }))}
+                            >
                               {'{{'+g.key+'}}'}
                             </button>
                           ))}
