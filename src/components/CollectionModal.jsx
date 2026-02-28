@@ -1,6 +1,7 @@
 import GlobalStore from './GlobalStore';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useMockApi } from './MockApiProvider';
+import { createCollectionRequest, updateCollectionRequest } from '../api/request.api';
 import './CollectionModal.css';
 
 // ─── Per-collection request shape (what the backend will return in future) ────
@@ -625,7 +626,7 @@ function DiffView({ saveA, saveB, onClear }) {
 }
 
 // ─── Main Modal ───────────────────────────────────────────────────────────────
-export default function CollectionModal({ collection, onClose, globals = [], setGlobals = () => {}, onCustomize }) {
+export default function CollectionModal({ collection, user, onClose, globals = [], setGlobals = () => {}, onCustomize }) {
   const { mockApiHit } = useMockApi();
   // Each collection owns its own requests — seed from collection.requests (future: from API)
   const [curls, setCurls] = useState(() => collection?.requests || []);
@@ -637,7 +638,7 @@ export default function CollectionModal({ collection, onClose, globals = [], set
   const [activeCurl, setActiveCurl]           = useState(firstCurl);
   const [activeTab, setActiveTab]             = useState('headers');
   const [url, setUrl]                         = useState(firstCurl?.url    || '');
-  const [method, setMethod]                   = useState(firstCurl?.method || 'GET');
+  const [method, setMethod]                   = useState(firstCurl?.method ?? 'GET');
   const [methodOpen, setMethodOpen]           = useState(false);
   const [recentHover, setRecentHover]         = useState(false);
   const [loading, setLoading]                 = useState(false);
@@ -715,7 +716,7 @@ export default function CollectionModal({ collection, onClose, globals = [], set
   const handleSelectCurl = (curl) => {
     setActiveCurl(curl);
     setUrl(curl.url || '');
-    setMethod(curl.method || 'GET');
+    setMethod(curl.method ?? 'GET');
     setKvState(initKV(curl));
     setResponse('');
     setSaveListOpen(false);
@@ -798,14 +799,14 @@ export default function CollectionModal({ collection, onClose, globals = [], set
     if (compareSelections.length < 2 && responseView === 'diff') setResponseView('response');
   }, [compareSelections.length]); // eslint-disable-line
 
-  const TABS = ['headers','params','body','auth'];
+  const TABS = ['headers','params','body','auth','info'];
   // curData reads directly from the activeCurl object (each request owns its data)
   const curData = activeCurl || {};
 
   // ── Add new blank request ──
   const handleRenameRequest = async (id, newName) => {
     try {
-      await mockApiHit('PATCH', `/api/collections/${collection.id}/requests/${id}`, { name: newName });
+      await updateCollectionRequest(id, { name: newName });
       setCurls(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c));
       if (activeCurl?.id === id) setActiveCurl(prev => ({ ...prev, name: newName }));
     } catch (err) {
@@ -815,16 +816,16 @@ export default function CollectionModal({ collection, onClose, globals = [], set
 
   const addNewRequest = async () => {
     try {
-      const newReq = await mockApiHit('POST', `/api/collections/${collection.id}/requests`, {
-        id: Date.now(),
+      const newReq = await createCollectionRequest({
+        collection_id: collection.id,
         name: `Request ${curls.length + 1}`,
-        method: 'GET', url: '',
-        headers: [], params: [], body: '', auth: 'No Auth', token: '',
+        method: '', url: '',
+        headers: [], params: [], body: '', auth: 'No Auth',
       });
       setCurls(prev => [...prev, newReq]);
       setCurlPanelOpen(true);
       setActiveCurl(newReq);
-      setUrl(''); setMethod('GET');
+      setUrl(''); setMethod('');
       setKvState({ headers: [], params: [] });
       setResponse(''); setResponseView('response');
       setCompareSelections([]); setSaveListOpen(false);
@@ -1086,6 +1087,19 @@ export default function CollectionModal({ collection, onClose, globals = [], set
                         </div>
                       )}
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* INFO */}
+              {activeTab==='info' && (
+                <div className="cm-info-panel">
+                  <div className="cm-info-head">Request Metadata</div>
+                  <div className="cm-info-grid">
+                    <div className="cm-info-row"><span className="cm-info-k">ID</span><code className="cm-info-v">{curData?.id}</code></div>
+                    <div className="cm-info-row"><span className="cm-info-k">Collection ID</span><code className="cm-info-v">{curData?.collection_id}</code></div>
+                    <div className="cm-info-row"><span className="cm-info-k">Created At</span><span className="cm-info-v">{curData?.created_at ? new Date(curData.created_at).toLocaleString() : '—'}</span></div>
+                    <div className="cm-info-row"><span className="cm-info-k">Updated At</span><span className="cm-info-v">{curData?.updated_at ? new Date(curData.updated_at).toLocaleString() : '—'}</span></div>
                   </div>
                 </div>
               )}

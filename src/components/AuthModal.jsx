@@ -1,28 +1,9 @@
 import { useState, useEffect } from 'react';
+import { signIn, signUp } from '../api/auth.api';
+import { ApiError } from '../api';
 import './AuthModal.css';
 
-// ─── Mock API ─────────────────────────────────────────────────────────────────
-const mockLogin = (identifier, password, result) =>
-  new Promise((res) =>
-    setTimeout(() => {
-      if (result === 'success') {
-        res({ success: true, user: { name: identifier.split('@')[0], email: identifier } });
-      } else {
-        res({ success: false });
-      }
-    }, 700)
-  );
 
-const mockRegister = (data, result) =>
-  new Promise((res) =>
-    setTimeout(() => {
-      if (result === 'success') {
-        res({ success: true, user: { name: data.firstName, email: data.email } });
-      } else {
-        res({ success: false, message: 'This email is already registered.' });
-      }
-    }, 800)
-  );
 
 // ─── Field ────────────────────────────────────────────────────────────────────
 function Field({ label, required, optional, type = 'text', placeholder, value, onChange, error, autoFocus }) {
@@ -101,10 +82,22 @@ export default function AuthModal({ onClose, onSuccess, devConfig, forcedView })
     if (Object.keys(e).length) { setLoginErr(e); return; }
     setLoginErr({});
     setLoading(true);
-    const res = await mockLogin(loginForm.identifier, loginForm.password, devConfig.loginResult);
-    setLoading(false);
-    res.success ? (() => { setView('login-success'); setTimeout(() => onSuccess(res.user), 1500); })()
-                : setView('login-fail');
+    
+    try {
+      const { user } = await signIn({ 
+        emailAddress: loginForm.identifier, 
+        password: loginForm.password 
+      });
+      setLoading(false);
+      setView('login-success'); 
+      setTimeout(() => onSuccess(user), 1500);
+    } catch (err) {
+      setLoading(false);
+      if (err instanceof ApiError) {
+        setLoginErr({ server: err.message });
+      }
+      setView('login-fail');
+    }
   };
 
   // ── Reg step 1 → 2 ───────────────────────────────────────────────────────
@@ -124,13 +117,19 @@ export default function AuthModal({ onClose, onSuccess, devConfig, forcedView })
     if (Object.keys(e).length) { setRegErr(e); return; }
     setRegErr({});
     setLoading(true);
-    const res = await mockRegister(regForm, devConfig.registerResult);
-    setLoading(false);
-    if (res.success) {
+
+    try {
+      const { user } = await signUp(regForm);
+      setLoading(false);
       setView('reg-success');
-      setTimeout(() => onSuccess(res.user), 1800);
-    } else {
-      setRegErr({ server: res.message });
+      setTimeout(() => onSuccess(user), 1800);
+    } catch (err) {
+      setLoading(false);
+      if (err instanceof ApiError) {
+        setRegErr({ server: err.message });
+      } else {
+        setRegErr({ server: 'Something went wrong. Please try again.' });
+      }
       setView('reg-fail');
     }
   };
@@ -172,7 +171,7 @@ export default function AuthModal({ onClose, onSuccess, devConfig, forcedView })
           <div className="am-view am-view--status" key="login-fail">
             <div className="am-status-icon am-status-icon--fail">✕</div>
             <h2 className="am-title">Login Failed</h2>
-            <p className="am-sub">We couldn't verify your credentials.<br />Want to create a new account instead?</p>
+            <p className="am-sub">{loginErr.server || "We couldn't verify your credentials."}<br />Want to create a new account instead?</p>
             <button className="am-btn am-btn--primary" onClick={goReg}>Register Now →</button>
             <button className="am-btn am-btn--ghost" onClick={() => setView('login')}>← Try Again</button>
           </div>

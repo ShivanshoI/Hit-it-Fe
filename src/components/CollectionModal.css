@@ -1420,3 +1420,38 @@
 .cm-curl-item--fav {
   border-left: 2px solid rgba(245,158,11,0.55) !important;
 }
+/* ── Info panel ─────────────────────────────────────────────────────────── */
+.cm-info-panel {
+  display: flex; flex-direction: column; gap: 0.8rem;
+  padding: 0.5rem 0.2rem;
+}
+.cm-info-head {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-dim);
+  margin-bottom: 0.2rem;
+}
+.cm-info-grid {
+  display: flex; flex-direction: column; gap: 0.4rem;
+  background: var(--bg); border: 1.5px solid var(--border);
+  border-radius: var(--r-md); padding: 0.8rem 1rem;
+}
+.cm-info-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1.5rem; padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+.cm-info-row:last-child { border-bottom: none; padding-bottom: 0; }
+.cm-info-k {
+  font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
+  white-space: nowrap;
+}
+.cm-info-v {
+  font-size: 0.78rem; color: var(--text);
+  font-family: var(--font-body);
+  word-break: break-all; text-align: right;
+}
+code.cm-info-v {
+  font-family: 'Fira Code', monospace;
+  background: var(--bg-2); padding: 0.1rem 0.35rem;
+  border-radius: 4px; border: 1px solid var(--border-2);
+}

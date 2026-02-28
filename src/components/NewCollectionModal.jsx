@@ -117,9 +117,9 @@ export default function NewCollectionModal({ existing = null, onClose, onSave })
   const [closing, setClosing]       = useState(false);
   const [expanded, setExpanded]     = useState(isEdit); // show more opts if editing
   const [name,    setName]          = useState(existing?.name    || '');
-  const [color,   setColor]         = useState(existing?.color   || '#7c3aed');
+  const [color,   setColor]         = useState(existing?.accent_color || '#7c3aed');
   const [pattern, setPattern]       = useState(existing?.pattern || 'waves');
-  const [method,  setMethod]        = useState(existing?.method  || 'GET');
+  const [method,  setMethod]        = useState(existing?.default_method || 'GET');
   const [tags,    setTags]          = useState(existing?.tags    || []);
   const [tagDraft, setTagDraft]     = useState('');
   const [nameErr, setNameErr]       = useState('');
@@ -155,14 +155,14 @@ export default function NewCollectionModal({ existing = null, onClose, onSave })
     }
     setNameErr('');
     onSave({
-      id:       existing?.id || Date.now(),
-      name:     name.trim(),
-      color,
+      id:             existing?.id || Date.now(),
+      name:           name.trim(),
+      accent_color:   color,
       pattern,
-      method,
+      default_method: method,
       tags,
-      requests: existing?.requests || [],
-      modified: new Date().toISOString().split('T')[0],
+      requests:       existing?.requests || [],
+      updated_at:     new Date().toISOString().split('T')[0],
     }, isEdit);
     handleClose();
   };

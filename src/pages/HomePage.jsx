@@ -2,65 +2,11 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import CollectionModal from '../components/CollectionModal';
 import NewCollectionModal from '../components/NewCollectionModal';
 import { useMockApi } from '../components/MockApiProvider';
+import { getCollections, getCollection, createCollection, updateCollection, deleteCollection, toggleFavoriteCollection } from '../api/homePage.api';
 import './HomePage.css';
 
 // ─── Initial Data (now lives in state so it's mutable) ────────────────────────
 // `requests` is an array of request objects — the shape the backend will return
-const INITIAL_COLLECTIONS = [
-  {
-    id: 1, name: 'Auth Service', tags: ['REST', 'OAuth'],
-    modified: '2026-02-21', method: 'POST', color: '#7c3aed', pattern: 'waves',
-    requests: [
-      { id: 101, name: 'Login',         method: 'POST', url: 'https://api.example.com/auth/login',   headers: [{ k: 'Content-Type', v: 'application/json' }], params: [], body: '{\n  "email": "",\n  "password": ""\n}', auth: 'No Auth', token: '' },
-      { id: 102, name: 'Refresh Token', method: 'POST', url: 'https://api.example.com/auth/refresh', headers: [], params: [], body: '{\n  "refreshToken": ""\n}',                                                   auth: 'Bearer',  token: '' },
-      { id: 103, name: 'Get Profile',   method: 'GET',  url: 'https://api.example.com/auth/me',      headers: [], params: [], body: '',                                                                            auth: 'Bearer',  token: '' },
-      { id: 104, name: 'Logout',        method: 'POST', url: 'https://api.example.com/auth/logout',  headers: [], params: [], body: '',                                                                            auth: 'Bearer',  token: '' },
-    ],
-  },
-  {
-    id: 2, name: 'Payment Gateway', tags: ['REST', 'Stripe'],
-    modified: '2026-02-20', method: 'POST', color: '#0ea5e9', pattern: 'grid',
-    requests: [
-      { id: 201, name: 'Create Payment Intent', method: 'POST', url: 'https://api.stripe.com/v1/payment_intents', headers: [{ k: 'Authorization', v: 'Bearer sk_test_...' }], params: [], body: '{\n  "amount": 1000,\n  "currency": "usd"\n}', auth: 'Bearer', token: '' },
-      { id: 202, name: 'List Charges',          method: 'GET',  url: 'https://api.stripe.com/v1/charges',          headers: [], params: [{ k: 'limit', v: '10' }], body: '', auth: 'Bearer', token: '' },
-      { id: 203, name: 'Refund',                method: 'POST', url: 'https://api.stripe.com/v1/refunds',          headers: [], params: [], body: '{\n  "charge": ""\n}', auth: 'Bearer', token: '' },
-    ],
-  },
-  {
-    id: 3, name: 'User Profiles API', tags: ['GraphQL'],
-    modified: '2026-02-18', method: 'GET', color: '#10b981', pattern: 'dots',
-    requests: [
-      { id: 301, name: 'Get User',    method: 'GET',    url: 'https://api.example.com/users/:id', headers: [], params: [{ k: 'id', v: '' }], body: '', auth: 'Bearer', token: '' },
-      { id: 302, name: 'Update User', method: 'PUT',    url: 'https://api.example.com/users/:id', headers: [{ k: 'Content-Type', v: 'application/json' }], params: [], body: '{\n  "name": ""\n}', auth: 'Bearer', token: '' },
-      { id: 303, name: 'Delete User', method: 'DELETE', url: 'https://api.example.com/users/:id', headers: [], params: [], body: '', auth: 'Bearer', token: '' },
-    ],
-  },
-  {
-    id: 4, name: 'Webhook Listeners', tags: ['WebSocket', 'Events'],
-    modified: '2026-02-15', method: 'WS', color: '#f59e0b', pattern: 'lines',
-    requests: [
-      { id: 401, name: 'Connect WS',       method: 'WS',   url: 'wss://api.example.com/events',     headers: [], params: [], body: '', auth: 'No Auth', token: '' },
-      { id: 402, name: 'Subscribe Events', method: 'POST', url: 'https://api.example.com/webhooks', headers: [], params: [], body: '{\n  "events": ["payment.succeeded"]\n}', auth: 'Bearer', token: '' },
-    ],
-  },
-  {
-    id: 5, name: 'Search Endpoints', tags: ['REST', 'Elastic'],
-    modified: '2026-02-12', method: 'GET', color: '#ec4899', pattern: 'cross',
-    requests: [
-      { id: 501, name: 'Full-text Search', method: 'GET', url: 'https://api.example.com/search',         headers: [], params: [{ k: 'q', v: '' }, { k: 'page', v: '1' }], body: '', auth: 'Bearer', token: '' },
-      { id: 502, name: 'Suggest',          method: 'GET', url: 'https://api.example.com/search/suggest', headers: [], params: [{ k: 'q', v: '' }], body: '', auth: 'Bearer', token: '' },
-    ],
-  },
-  {
-    id: 6, name: 'Notification Service', tags: ['REST', 'Firebase'],
-    modified: '2026-02-10', method: 'POST', color: '#6366f1', pattern: 'waves',
-    requests: [
-      { id: 601, name: 'Send Push',  method: 'POST', url: 'https://api.example.com/notifications/push',  headers: [{ k: 'Content-Type', v: 'application/json' }], params: [], body: '{\n  "token": "",\n  "title": "",\n  "body": ""\n}', auth: 'Bearer', token: '' },
-      { id: 602, name: 'Send Email', method: 'POST', url: 'https://api.example.com/notifications/email', headers: [], params: [], body: '{\n  "to": "",\n  "subject": ""\n}', auth: 'Bearer', token: '' },
-    ],
-  },
-];
-
 const SORT_OPTIONS = ['Last Modified', 'Name A–Z', 'Name Z–A', 'Most Requests'];
 
 const METHOD_COLORS = {
@@ -174,17 +120,17 @@ function CardMenu({ onOpen, onCustomize, onDelete }) {
 
 // ─── Collection Card ──────────────────────────────────────────────────────────
 function CollectionCard({ collection, style, onClick, onCustomize, onDelete, isFav, onToggleFav }) {
-  const method = METHOD_COLORS[collection.method] || METHOD_COLORS.GET;
-  const days = Math.floor((Date.now() - new Date(collection.modified)) / 86400000);
+  const method = METHOD_COLORS[collection.default_method] || METHOD_COLORS.GET;
+  const days = Math.floor((Date.now() - new Date(collection.updated_at)) / 86400000);
   const timeStr = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : `${days}d ago`;
 
   return (
     <div className={`hc-card${isFav ? ' hc-card--fav' : ''}`} style={style} onClick={onClick}>
       {/* Thumbnail */}
-      <div className="hc-card-thumb" style={{ borderBottom: `2px solid ${collection.color}22` }}>
-        <Thumbnail color={collection.color} pattern={collection.pattern} />
+      <div className="hc-card-thumb" style={{ borderBottom: `2px solid ${collection.accent_color}22` }}>
+        <Thumbnail color={collection.accent_color} pattern={collection.pattern} />
         <div className="hc-card-method" style={{ background: method.bg, color: method.text }}>
-          {collection.method}
+          {collection.default_method}
         </div>
         {/* ── Favourite star ── */}
         <button
@@ -329,7 +275,11 @@ function Sidebar({ user, onLogout }) {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function HomePage({ user, onLogout }) {
   const { mockApiHit } = useMockApi();
-  const [collections, setCollections]         = useState(INITIAL_COLLECTIONS);
+  const [collections, setCollections]         = useState([]);
+  const [page, setPage]                       = useState(1);
+  const [hasMore, setHasMore]                 = useState(true);
+  const [loading, setLoading]                 = useState(false);
+  
   const [search, setSearch]                   = useState('');
   const [sort, setSort]                       = useState('Last Modified');
   const [sortOpen, setSortOpen]               = useState(false);
@@ -340,10 +290,41 @@ export default function HomePage({ user, onLogout }) {
   const [newCollOpen, setNewCollOpen]         = useState(false);
   const [editingColl, setEditingColl]         = useState(null); // null = create, obj = edit
 
+  useEffect(() => {
+    fetchCollections(1, true);
+  }, [user?.id]);
+
+  const fetchCollections = async (pageNumber, isReset = false) => {
+    if (!user?.id) return;
+    try {
+      setLoading(true);
+      let response = await getCollections(pageNumber, 10);
+      let data = Array.isArray(response) ? response : (response?.collections || []);
+      
+      setHasMore(data.length === 10);
+      
+      if (isReset) {
+        setCollections(data);
+      } else {
+        setCollections(prev => {
+          const prevArr = Array.isArray(prev) ? prev : [];
+          const map = new Map(prevArr.map(c => [c.id, c]));
+          data.forEach(c => map.set(c.id, c));
+          return Array.from(map.values());
+        });
+      }
+      setPage(pageNumber);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const toggleFavCollection = async (id) => {
     const isFav = favCollections.has(id);
     try {
-      await mockApiHit('PATCH', `/api/collections/${id}/favorite`, { favorite: !isFav });
+      await toggleFavoriteCollection(id, !isFav);
       setFavCollections(prev => {
         const next = new Set(prev);
         next.has(id) ? next.delete(id) : next.add(id);
@@ -355,7 +336,7 @@ export default function HomePage({ user, onLogout }) {
   };
 
   const filtered = useMemo(() => {
-    let list = [...collections];
+    let list = Array.isArray(collections) ? [...collections] : [];
     if (showFavOnly) list = list.filter(c => favCollections.has(c.id));
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -368,7 +349,7 @@ export default function HomePage({ user, onLogout }) {
       case 'Name A–Z': list.sort((a, b) => a.name.localeCompare(b.name)); break;
       case 'Name Z–A': list.sort((a, b) => b.name.localeCompare(a.name)); break;
       case 'Most Requests': list.sort((a, b) => (b.requests||[]).length - (a.requests||[]).length); break;
-      default: list.sort((a, b) => new Date(b.modified) - new Date(a.modified));
+      default: list.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
     }
     return list;
   }, [collections, search, sort, showFavOnly, favCollections]);
@@ -387,11 +368,20 @@ export default function HomePage({ user, onLogout }) {
 
   const handleSaveCollection = async (collection, isEdit) => {
     try {
-      const savedCollection = await mockApiHit(
-        isEdit ? 'PUT' : 'POST',
-        `/api/collections${isEdit ? `/${collection.id}` : ''}`,
-        collection
-      );
+      // Ensure timestamps match backend expectations
+      const payload = {
+        ...collection,
+        updated_at: new Date().toISOString(),
+        ...(isEdit ? {} : { created_at: new Date().toISOString() })
+      };
+
+      let savedCollection;
+      if (isEdit) {
+        savedCollection = await updateCollection(payload.id, payload);
+      } else {
+        savedCollection = await createCollection(payload);
+      }
+
       if (isEdit) {
         // Update existing
         setCollections(prev => prev.map(c => c.id === savedCollection.id ? savedCollection : c));
@@ -409,7 +399,7 @@ export default function HomePage({ user, onLogout }) {
 
   const handleDeleteCollection = async (id) => {
     try {
-      await mockApiHit('DELETE', `/api/collections/${id}`);
+      await deleteCollection(id);
       setCollections(prev => prev.filter(c => c.id !== id));
       if (selectedCollection?.id === id) setSelectedCollection(null);
     } catch (err) {
@@ -511,8 +501,8 @@ export default function HomePage({ user, onLogout }) {
               style={{ animationDelay: `${i * 0.05}s` }}
               onClick={async () => {
                 try {
-                  const fullCollection = await mockApiHit('GET', `/api/collections/${c.id}`, c);
-                  setSelectedCollection(fullCollection);
+                  const fullCollection = await getCollection(c.id);
+                  setSelectedCollection(fullCollection || c);
                 } catch (err) {
                   console.error(err);
                 }
@@ -529,6 +519,34 @@ export default function HomePage({ user, onLogout }) {
           />
         </div>
 
+        {/* Pagination Controls */}
+        {!loading && hasMore && (
+          <div className="hp-pagination" style={{ display: 'flex', justifyContent: 'center', marginTop: '24px', paddingBottom: '24px' }}>
+            {collections.length < 20 ? (
+              <button 
+                className="hp-btn-load-more" 
+                style={{ padding: '8px 16px', borderRadius: '6px', background: '#3b82f6', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500 }}
+                onClick={() => fetchCollections(page + 1)}
+              >
+                Load More
+              </button>
+            ) : (
+              <button 
+                className="hp-btn-next" 
+                style={{ padding: '8px 16px', borderRadius: '6px', background: '#10b981', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500 }}
+                onClick={() => fetchCollections(page + 1, true)}
+              >
+                Next
+              </button>
+            )}
+          </div>
+        )}
+        {loading && (
+          <div style={{ textAlign: 'center', marginTop: '24px', paddingBottom: '24px', color: '#6b7280' }}>
+            Loading collections...
+          </div>
+        )}
+
         {filtered.length === 0 && (
           <div className="hp-empty">
             <div className="hp-empty-icon">⊘</div>
@@ -541,6 +559,7 @@ export default function HomePage({ user, onLogout }) {
       {/* Collection viewer modal */}
       {selectedCollection && (
         <CollectionModal
+          user={user}
           collection={selectedCollection}
           onClose={() => setSelectedCollection(null)}
           onCustomize={() => openCustomizeModal(selectedCollection)}

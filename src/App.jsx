@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { signOut, getMe } from './api/auth.api';
 import LandingPage from './pages/LandingPage';
 import HomePage from './pages/HomePage';
 import AuthModal from './components/AuthModal';
@@ -11,6 +12,7 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [forcedView, setForcedView] = useState(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   const [devConfig, setDevConfig] = useState({
     loginResult: 'success',
@@ -28,6 +30,27 @@ export default function App() {
     setForcedView(null);
   };
 
+  useEffect(() => {
+    const initializeUser = async () => {
+      try {
+        const data = await getMe();
+        if (data?.user) {
+          setUser(data.user);
+          setIsLoggedIn(true);
+        } else {
+          signOut();
+        }
+      } catch (err) {
+        // Token invalid or network error
+        signOut();
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initializeUser();
+  }, []);
+
   const handleLoginSuccess = (userData) => {
     setUser(userData);
     setIsLoggedIn(true);
@@ -35,11 +58,19 @@ export default function App() {
     setForcedView(null);
   };
 
+  if (isInitializing) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0a0a0b', color: '#fff' }}>
+        Loading...
+      </div>
+    );
+  }
+
   return (
     <MockApiProvider>
       <div className="app">
         {isLoggedIn ? (
-          <HomePage user={user} onLogout={() => { setUser(null); setIsLoggedIn(false); }} />
+          <HomePage user={user} onLogout={() => { signOut(); setUser(null); setIsLoggedIn(false); }} />
         ) : (
           <LandingPage onOpenAuth={() => setModalOpen(true)} />
         )}
