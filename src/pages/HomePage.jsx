@@ -3,6 +3,7 @@ import CollectionModal from '../components/CollectionModal';
 import NewCollectionModal from '../components/NewCollectionModal';
 import { useMockApi } from '../components/MockApiProvider';
 import { getCollections, getCollection, createCollection, updateCollection, deleteCollection, toggleFavoriteCollection } from '../api/homePage.api';
+import { importCollaborators } from '../api/collaborators.api';
 import './HomePage.css';
 
 // ─── Initial Data (now lives in state so it's mutable) ────────────────────────
@@ -289,6 +290,12 @@ export default function HomePage({ user, onLogout }) {
   // New/Edit collection modal
   const [newCollOpen, setNewCollOpen]         = useState(false);
   const [editingColl, setEditingColl]         = useState(null); // null = create, obj = edit
+  
+  // Import collection state
+  const [importOpen, setImportOpen]           = useState(false);
+  const [importLinkId, setImportLinkId]       = useState('');
+  const [importing, setImporting]             = useState(false);
+  const [importError, setImportError]         = useState('');
 
   useEffect(() => {
     fetchCollections(1, true);
@@ -360,6 +367,29 @@ export default function HomePage({ user, onLogout }) {
     setNewCollOpen(true);
   };
 
+  const handleImport = async () => {
+    if (!importLinkId.trim()) return;
+    try {
+      setImporting(true);
+      setImportError('');
+      // Send the entire pasted text as 'id_string'. Backend handles extraction.
+      const res = await importCollaborators({ id_string: importLinkId.trim() });
+      
+      if (res?.status === 'success') {
+        setImportOpen(false);
+        setImportLinkId('');
+        fetchCollections(1, true); // Refresh collections after successful import
+      } else {
+        setImportError(res?.message || 'Failed to import. The backend did not return success.');
+      }
+    } catch (err) {
+      console.error('Import failed', err);
+      setImportError(err?.message || 'Failed to import. Please check the ID or link.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const openCustomizeModal = (collection, e) => {
     if (e) e.stopPropagation();
     setEditingColl(collection);
@@ -417,12 +447,20 @@ export default function HomePage({ user, onLogout }) {
           <div className="hp-topbar-left">
             <h1 className="hp-page-title">Collections</h1>
           </div>
-          <button className="hp-btn-new" onClick={openNewCollectionModal}>
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M6.5 1v11M1 6.5h11"/>
-            </svg>
-            New Collection
-          </button>
+          <div className="hp-topbar-right" style={{ display: 'flex', gap: '8px' }}>
+            <button className="hp-btn-new" onClick={() => setImportOpen(true)} style={{ background: '#4b5563', borderColor: '#4b5563' }}>
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M6.5 1v8M3.5 6l3 3 3-3M1 11h11"/>
+              </svg>
+              Import
+            </button>
+            <button className="hp-btn-new" onClick={openNewCollectionModal}>
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M6.5 1v11M1 6.5h11"/>
+              </svg>
+              New Collection
+            </button>
+          </div>
         </header>
 
         {/* Toolbar: search + sort */}
@@ -570,6 +608,46 @@ export default function HomePage({ user, onLogout }) {
           onClose={() => { setNewCollOpen(false); setEditingColl(null); }}
           onSave={handleSaveCollection}
         />
+      )}
+
+      {/* Import Modal */}
+      {importOpen && (
+        <div className="hp-modal-overlay" onClick={() => setImportOpen(false)}>
+          <div className="hp-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px', width: '100%' }}>
+            <div className="hp-modal-head">
+              <h2>Import Collaboration</h2>
+              <button className="hp-modal-close" onClick={() => setImportOpen(false)}>×</button>
+            </div>
+            <div className="hp-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                  Collaboration Link or ID
+                </label>
+                <input
+                  autoFocus
+                  style={{ width: '100%', padding: '8px 12px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }}
+                  placeholder="Paste link or ID here..."
+                  value={importLinkId}
+                  onChange={e => setImportLinkId(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleImport(); }}
+                />
+              </div>
+              {importError && (
+                <div style={{ color: '#ef4444', fontSize: '13px', padding: '8px', background: '#fee2e2', borderRadius: '6px' }}>
+                  {importError}
+                </div>
+              )}
+            </div>
+            <div className="hp-modal-foot" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '16px', borderTop: '1px solid #f3f4f6' }}>
+              <button onClick={() => setImportOpen(false)} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}>
+                Cancel
+              </button>
+              <button onClick={handleImport} disabled={importing || !importLinkId.trim()} style={{ padding: '6px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', opacity: (importing || !importLinkId.trim()) ? 0.7 : 1 }}>
+                {importing ? 'Importing...' : 'Import'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

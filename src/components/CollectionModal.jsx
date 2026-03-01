@@ -2,6 +2,7 @@ import GlobalStore from './GlobalStore';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useMockApi } from './MockApiProvider';
 import { createCollectionRequest, updateCollectionRequest, getCollectionRequestsSummary, getRequestDetails, updateRequestNote } from '../api/request.api';
+import { exportCollaborators } from '../api/collaborators.api';
 import './CollectionModal.css';
 
 // ─── Per-collection request shape (what the backend will return in future) ────
@@ -367,15 +368,15 @@ function SharePanel({ collection, activeCurl, onClose }) {
   const [invPerm, setInvPerm]           = useState('read-only');
   const panelRef                        = useRef(null);
 
-  // Stable suffix so the link doesn't change on every render
-  const [linkSuffix]  = useState(() => Math.random().toString(36).slice(2, 9));
   const [shareLink, setShareLink] = useState('');
+  const [linkGenerating, setLinkGenerating] = useState(false);
+  
+  const idValue = scope === 'collection' ? collection?.id : activeCurl?.id;
 
   useEffect(() => {
-    mockApiHit('POST', '/api/share/link', { scope, permission }).then(() => {
-      setShareLink(`https://hitit.dev/share/${scope === 'collection' ? 'c' : 'r'}-${permission === 'read-only' ? 'ro' : 'rw'}-${linkSuffix}`);
-    }).catch(console.error);
-  }, [scope, permission, linkSuffix, mockApiHit]);
+    // Generate the share link locally now
+    setShareLink(`https://hitit.dev/share/${scope === 'collection' ? 'c' : 'r'}-${permission === 'read-only' ? 'ro' : 'rw'}-${idValue}`);
+  }, [scope, permission, idValue]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(shareLink).catch(() => {});
@@ -388,13 +389,30 @@ function SharePanel({ collection, activeCurl, onClose }) {
     if (!email) return;
     try {
       const name = email.split('@')[0];
-      const newInv = await mockApiHit('POST', `/api/collections/${collection?.id || 0}/collaborators`, {
-        id: Date.now(), name, initial: name[0].toUpperCase(), email, permission: invPerm
-      });
+      const payload = {
+        ID: scope === 'collection' ? collection?.id : activeCurl?.id,
+        type: scope,
+        permission: invPerm === 'read-write',
+        email: email, // This marks it as a direct invite
+        data: {
+          name: scope === 'collection' ? collection?.name : activeCurl?.name,
+          invite_time: new Date().toISOString()
+        }
+      };
+      const res = await exportCollaborators(payload);
+      
+      const newInv = {
+        id: res?.id || Date.now(), 
+        name, 
+        initial: name[0].toUpperCase(), 
+        email, 
+        permission: invPerm
+      };
+      
       setInvitees(p => [...p, newInv]);
       setEmailDraft('');
     } catch (err) {
-      console.error(err);
+      console.error('Error inviting collaborator:', err);
     }
   };
 
