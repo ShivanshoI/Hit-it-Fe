@@ -5,11 +5,11 @@ import { apiClient } from '../api';
  * GET /api/collections
  */
 export async function getCollections(page = 1, limit = 10) {
-  const body = await apiClient(`/api/collections?page=${page}&limit=${limit}`, {
+  const response = await apiClient(`/api/collections?page=${page}&limit=${limit}`, {
     method: 'GET',
     auth: true,
   });
-  return body.data;
+  return response.data;
 }
 
 /**
@@ -17,11 +17,11 @@ export async function getCollections(page = 1, limit = 10) {
  * GET /api/collections/:id
  */
 export async function getCollection(id) {
-  const body = await apiClient(`/api/collections/${id}`, {
+  const response = await apiClient(`/api/collections/${id}`, {
     method: 'GET',
     auth: true,
   });
-  return body.data;
+  return response.data;
 }
 
 /**
@@ -29,12 +29,12 @@ export async function getCollection(id) {
  * POST /api/collections
  */
 export async function createCollection(payload) {
-  const body = await apiClient('/api/collections', {
+  const response = await apiClient('/api/collections', {
     method: 'POST',
     auth: true,
     body: JSON.stringify(payload),
   });
-  return body.data;
+  return response.data;
 }
 
 /**
@@ -42,12 +42,12 @@ export async function createCollection(payload) {
  * PUT /api/collections/:id
  */
 export async function updateCollection(id, payload) {
-  const body = await apiClient(`/api/collections/${id}`, {
+  const response = await apiClient(`/api/collections/${id}`, {
     method: 'PUT',
     auth: true,
     body: JSON.stringify(payload),
   });
-  return body.data;
+  return response.data;
 }
 
 /**
@@ -55,22 +55,22 @@ export async function updateCollection(id, payload) {
  * DELETE /api/collections/:id
  */
 export async function deleteCollection(id) {
-  const body = await apiClient(`/api/collections/${id}`, {
+  const response = await apiClient(`/api/collections/${id}`, {
     method: 'DELETE',
     auth: true,
   });
-  return body.data;
+  return response.data;
 }
 
 /**
  * Toggle favourite status of a collection
  * PATCH /api/collections/:id/favorite
  */
-export async function toggleFavoriteCollection(id, isFavorite) {
-  const body = await apiClient(`/api/collections/${id}/favorite`, {
+export async function toggleFavoriteCollection(id, payload) {
+  const response = await apiClient(`/api/collections/${id}/mod/favorite`, {
     method: 'PATCH',
     auth: true,
-    body: JSON.stringify({ favorite: isFavorite }),
+    body: JSON.stringify(payload),
   });
-  return body.data;
+  return response.data;
 }

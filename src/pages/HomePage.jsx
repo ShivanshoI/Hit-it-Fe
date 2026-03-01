@@ -324,7 +324,7 @@ export default function HomePage({ user, onLogout }) {
   const toggleFavCollection = async (id) => {
     const isFav = favCollections.has(id);
     try {
-      await toggleFavoriteCollection(id, !isFav);
+      await toggleFavoriteCollection(id, { favorite: !isFav });
       setFavCollections(prev => {
         const next = new Set(prev);
         next.has(id) ? next.delete(id) : next.add(id);
