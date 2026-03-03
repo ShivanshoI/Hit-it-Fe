@@ -362,6 +362,7 @@ function SharePanel({ collection, activeCurl, onClose }) {
   const { mockApiHit } = useMockApi();
   const [scope, setScope]               = useState('collection'); // 'collection' | 'request'
   const [permission, setPermission]     = useState('read-only');  // 'read-only'  | 'read-write'
+  const [shareAsNew, setShareAsNew]     = useState(false);
   const [copied, setCopied]             = useState(false);
   const [invitees, setInvitees]         = useState(MOCK_INVITEES);
   const [emailDraft, setEmailDraft]     = useState('');
@@ -375,8 +376,9 @@ function SharePanel({ collection, activeCurl, onClose }) {
 
   useEffect(() => {
     // Generate the share link locally now
-    setShareLink(`https://hitit.dev/share/${scope === 'collection' ? 'c' : 'r'}-${permission === 'read-only' ? 'ro' : 'rw'}-${idValue}`);
-  }, [scope, permission, idValue]);
+    const baseLink = `https://hitit.dev/share/${scope === 'collection' ? 'c' : 'r'}-${permission === 'read-only' ? 'ro' : 'rw'}-${idValue}`;
+    setShareLink(shareAsNew ? `${baseLink}?new=true` : baseLink);
+  }, [scope, permission, idValue, shareAsNew]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(shareLink).catch(() => {});
@@ -393,6 +395,7 @@ function SharePanel({ collection, activeCurl, onClose }) {
         ID: scope === 'collection' ? collection?.id : activeCurl?.id,
         type: scope,
         permission: invPerm === 'read-write',
+        share_as_new: shareAsNew,
         email: email, // This marks it as a direct invite
         data: {
           name: scope === 'collection' ? collection?.name : activeCurl?.name,
@@ -466,13 +469,13 @@ function SharePanel({ collection, activeCurl, onClose }) {
               <span className="cm-share-scope-sub">{collection?.name || 'All requests'}</span>
             </div>
           </button>
-          <button className={`cm-share-scope-btn${scope==='request'?' active':''}`} onClick={() => setScope('request')}>
+          <button className={`cm-share-scope-btn${shareAsNew?' active':''}`} onClick={() => setShareAsNew(!shareAsNew)}>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <rect x="1" y="2" width="12" height="10" rx="1.5"/><path d="M4 5h6M4 7.5h4"/>
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m2.618 5.382A2.001 2.001 0 0 1 4 11V8a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2.236 1.988M4 11h.01M10 3h4v4m-4-4l5 5"/>
             </svg>
             <div>
-              <span className="cm-share-scope-name">Request</span>
-              <span className="cm-share-scope-sub">{activeCurl?.name || 'Current request'}</span>
+              <span className="cm-share-scope-name">Share as New</span>
+              <span className="cm-share-scope-sub">Create a copy</span>
             </div>
           </button>
         </div>
