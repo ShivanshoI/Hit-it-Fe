@@ -3,7 +3,7 @@ import CollectionModal from '../components/CollectionModal';
 import NewCollectionModal from '../components/NewCollectionModal';
 import ImportModal from '../components/ImportModal';
 import { useMockApi } from '../components/MockApiProvider';
-import { getCollections, getCollection, createCollection, updateCollection, deleteCollection, toggleFavoriteCollection } from '../api/homePage.api';
+import { getCollections, getCollection, createCollection, updateCollection, deleteCollection, toggleFavoriteCollection, getFavoriteCollections, getSharedCollections } from '../api/homePage.api';
 import './HomePage.css';
 
 // ─── Initial Data (now lives in state so it's mutable) ────────────────────────
@@ -203,9 +203,7 @@ function NewCard({ style, onClick }) {
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
-function Sidebar({ user, onLogout }) {
-  const [active, setActive] = useState('home');
-
+function Sidebar({ user, onLogout, active, setActive }) {
   const navItems = [
     { id: 'home', label: 'Home', icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -218,14 +216,19 @@ function Sidebar({ user, onLogout }) {
         <rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>
       </svg>
     )},
+    { id: 'favorites', label: 'Favorites', icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+        <path d="M8 2l1.8 3.7 4.1.6-3 2.9.7 4.1-3.6-1.9-3.6 1.9.7-4.1-3-2.9 4.1-.6L8 2z"/>
+      </svg>
+    )},
+    { id: 'shared', label: 'Shared', icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+        <path d="M12 5.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM4 11.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM15 11.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM4 10l5-3M11 7l3.5 3.5"/>
+      </svg>
+    )},
     { id: 'envs', label: 'Environments', icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
         <circle cx="8" cy="8" r="6"/><path d="M8 2a9 9 0 010 12M2 8h12"/>
-      </svg>
-    )},
-    { id: 'history', label: 'History', icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-        <circle cx="8" cy="8" r="6"/><path d="M8 5v3.5l2.5 1.5"/>
       </svg>
     )},
     { id: 'team', label: 'Team', icon: (
@@ -294,19 +297,39 @@ export default function HomePage({ user, onLogout }) {
   // Import collection state
   const [importOpen, setImportOpen]           = useState(false);
 
+  const [activeTab, setActiveTab]             = useState('home');
+
   useEffect(() => {
     fetchCollections(1, true);
-  }, [user?.id]);
+  }, [user?.id, activeTab]);
 
   const fetchCollections = async (pageNumber, isReset = false) => {
     if (!user?.id) return;
     try {
       setLoading(true);
-      let response = await getCollections(pageNumber, 10);
+      let response;
+      if (activeTab === 'favorites') {
+        response = await getFavoriteCollections(pageNumber, 14);
+      } else if (activeTab === 'shared') {
+        response = await getSharedCollections(pageNumber, 14);
+      } else {
+        response = await getCollections(pageNumber, 14);
+      }
+      
       let data = Array.isArray(response) ? response : (response?.collections || []);
       
-      setHasMore(data.length === 10);
+      setHasMore(data.length === 14);
       
+      // Sync favorite status from the server response
+      setFavCollections(prev => {
+        const next = new Set(prev);
+        data.forEach(c => {
+          if (c.favorite) next.add(c.id);
+          else next.delete(c.id);
+        });
+        return next;
+      });
+
       if (isReset) {
         setCollections(data);
       } else {
@@ -357,6 +380,11 @@ export default function HomePage({ user, onLogout }) {
     }
     return list;
   }, [collections, search, sort, showFavOnly, favCollections]);
+
+  const currentFavCount = useMemo(() => {
+    if (!Array.isArray(collections)) return 0;
+    return collections.filter(c => favCollections.has(c.id)).length;
+  }, [collections, favCollections]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const openNewCollectionModal = () => {
@@ -413,7 +441,7 @@ export default function HomePage({ user, onLogout }) {
 
   return (
     <div className="hp-root">
-      <Sidebar user={user} onLogout={onLogout} />
+      <Sidebar user={user} onLogout={onLogout} active={activeTab} setActive={setActiveTab} />
 
       <div className="hp-main">
         {/* Top bar */}
@@ -421,20 +449,22 @@ export default function HomePage({ user, onLogout }) {
           <div className="hp-topbar-left">
             <h1 className="hp-page-title">Collections</h1>
           </div>
-          <div className="hp-topbar-right" style={{ display: 'flex', gap: '8px' }}>
-            <button className="hp-btn-new" onClick={() => setImportOpen(true)} style={{ background: '#4b5563', borderColor: '#4b5563' }}>
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M6.5 1v8M3.5 6l3 3 3-3M1 11h11"/>
-              </svg>
-              Import
-            </button>
-            <button className="hp-btn-new" onClick={openNewCollectionModal}>
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M6.5 1v11M1 6.5h11"/>
-              </svg>
-              New Collection
-            </button>
-          </div>
+          {(activeTab === 'home' || activeTab === 'collections') && (
+            <div className="hp-topbar-right" style={{ display: 'flex', gap: '8px' }}>
+              <button className="hp-btn-new" onClick={() => setImportOpen(true)} style={{ background: '#4b5563', borderColor: '#4b5563' }}>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M6.5 1v8M3.5 6l3 3 3-3M1 11h11"/>
+                </svg>
+                Import
+              </button>
+              <button className="hp-btn-new" onClick={openNewCollectionModal}>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M6.5 1v11M1 6.5h11"/>
+                </svg>
+                New Collection
+              </button>
+            </div>
+          )}
         </header>
 
         {/* Toolbar: search + sort */}
@@ -486,7 +516,7 @@ export default function HomePage({ user, onLogout }) {
           </div>
 
           <span className="hp-count">{filtered.length} collection{filtered.length !== 1 ? 's' : ''}</span>
-          {favCollections.size > 0 && (
+          {activeTab !== 'favorites' && currentFavCount > 0 && (
             <button
               className={`hp-fav-filter${showFavOnly ? ' active' : ''}`}
               onClick={() => setShowFavOnly(v => !v)}
@@ -499,7 +529,7 @@ export default function HomePage({ user, onLogout }) {
               >
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
               </svg>
-              Favourites ({favCollections.size})
+              Favourites ({currentFavCount})
             </button>
           )}
         </div>
@@ -520,10 +550,12 @@ export default function HomePage({ user, onLogout }) {
               onToggleFav={() => toggleFavCollection(c.id)}
             />
           ))}
-          <NewCard
-            style={{ animationDelay: `${filtered.length * 0.05}s` }}
-            onClick={openNewCollectionModal}
-          />
+          {(activeTab === 'home' || activeTab === 'collections') && (
+            <NewCard
+              style={{ animationDelay: `${filtered.length * 0.05}s` }}
+              onClick={openNewCollectionModal}
+            />
+          )}
         </div>
 
         {/* Pagination Controls */}
@@ -557,8 +589,14 @@ export default function HomePage({ user, onLogout }) {
         {filtered.length === 0 && (
           <div className="hp-empty">
             <div className="hp-empty-icon">⊘</div>
-            <p>No collections match <strong>"{search}"</strong></p>
-            <button className="hp-empty-clear" onClick={() => setSearch('')}>Clear search</button>
+            {activeTab === 'shared' ? (
+              <p>No file shared with you</p>
+            ) : (
+              <>
+                <p>No collections match <strong>"{search}"</strong></p>
+                <button className="hp-empty-clear" onClick={() => setSearch('')}>Clear search</button>
+              </>
+            )}
           </div>
         )}
       </div>

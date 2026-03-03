@@ -1,11 +1,15 @@
 import { apiClient } from '../api';
 
 /**
- * Fetch all collections for the user
- * GET /api/collections
+ * Fetch collections with optional filtering and pagination
+ * GET /api/collections?filter=...&page=...&limit=...
  */
-export async function getCollections(page = 1, limit = 10) {
-  const response = await apiClient(`/api/collections?page=${page}&limit=${limit}`, {
+export async function getCollections(page = 1, limit = 10, filter = '') {
+  let url = `/api/collections?page=${page}&limit=${limit}`;
+  if (filter) {
+    url += `&filter=${filter}`;
+  }
+  const response = await apiClient(url, {
     method: 'GET',
     auth: true,
   });
@@ -39,11 +43,11 @@ export async function createCollection(payload) {
 
 /**
  * Update an existing collection
- * PUT /api/collections/:id
+ * PATCH /api/collections/:id/mod/
  */
 export async function updateCollection(id, payload) {
-  const response = await apiClient(`/api/collections/${id}`, {
-    method: 'PUT',
+  const response = await apiClient(`/api/collections/${id}/mod/`, {
+    method: 'PATCH',
     auth: true,
     body: JSON.stringify(payload),
   });
@@ -73,4 +77,20 @@ export async function toggleFavoriteCollection(id, payload) {
     body: JSON.stringify(payload),
   });
   return response.data;
+}
+
+/**
+ * Fetch favorite collections
+ * GET /api/collections?filter=fav
+ */
+export async function getFavoriteCollections(page = 1, limit = 10) {
+  return getCollections(page, limit, 'fav');
+}
+
+/**
+ * Fetch shared collections
+ * GET /api/collections?filter=share
+ */
+export async function getSharedCollections(page = 1, limit = 10) {
+  return getCollections(page, limit, 'share');
 }
