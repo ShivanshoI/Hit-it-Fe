@@ -372,7 +372,10 @@ function SharePanel({ collection, activeCurl, onClose }) {
   const [shareLink, setShareLink] = useState('');
   const [linkGenerating, setLinkGenerating] = useState(false);
   
-  const idValue = scope === 'collection' ? collection?.id : activeCurl?.id;
+  const idValue = useMemo(() => {
+    const target = scope === 'collection' ? collection : activeCurl;
+    return (shareAsNew ? target?._id : target?.masterId) || target?.id;
+  }, [scope, collection, activeCurl, shareAsNew]);
 
   useEffect(() => {
     // Generate the share link locally now
@@ -392,7 +395,7 @@ function SharePanel({ collection, activeCurl, onClose }) {
     try {
       const name = email.split('@')[0];
       const payload = {
-        ID: scope === 'collection' ? collection?.id : activeCurl?.id,
+        ID: idValue,
         type: scope,
         permission: invPerm === 'read-write',
         share_as_new: shareAsNew,
