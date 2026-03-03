@@ -1,7 +1,7 @@
 import GlobalStore from './GlobalStore';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useMockApi } from './MockApiProvider';
-import { createCollectionRequest, updateCollectionRequest, getCollectionRequestsSummary, getRequestDetails, updateRequestNote } from '../api/request.api';
+import { createCollectionRequest, updateCollectionRequest, getCollectionRequestsSummary, getRequestDetails, updateRequestNote, hitRequest } from '../api/request.api';
 import { exportCollaborators } from '../api/collaborators.api';
 import './CollectionModal.css';
 
@@ -744,6 +744,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   const [recentHover, setRecentHover]         = useState(false);
   const [loading, setLoading]                 = useState(false);
   const [response, setResponse]               = useState('');
+  const [responseMeta, setResponseMeta]       = useState(null);
   const [responseSaved, setResponseSaved]     = useState(false);
   const [savedResponses, setSavedResponses]   = useState({});
   const [saveListOpen, setSaveListOpen]       = useState(false);
@@ -866,6 +867,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
     setMethod(curl.method ?? 'GET');
     setRequestNote(curl.note || '');
     setResponse('');
+    setResponseMeta(null);
     setSaveListOpen(false);
     setCompareSelections([]);
     setResponseView('response');
@@ -940,10 +942,37 @@ export default function CollectionModal({ collection, user, onClose, globals = [
     }
 
     try {
-      const resData = await mockApiHit('POST', '/api/proxy', MOCK_RESPONSE);
-      setResponse(resData);
+      if (!activeCurl?.id) {
+        setResponse("Error: Please save the request before hitting it.");
+        setLoading(false);
+        return;
+      }
+      const resData = await hitRequest(activeCurl.id);
+      
+      setResponseMeta({
+        status_code: resData.status_code,
+        status_text: resData.status_text,
+        time: resData.response_time_ms,
+        size: resData.response_size_bytes,
+        headers: resData.headers || []
+      });
+
+      let bodyText = resData.body;
+      if (typeof resData.body === 'string') {
+        try {
+          const parsed = JSON.parse(resData.body);
+          bodyText = JSON.stringify(parsed, null, 2);
+        } catch (e) {
+          // Keep as string if parsing fails
+        }
+      } else if (typeof resData.body === 'object') {
+        bodyText = JSON.stringify(resData.body, null, 2);
+      }
+      
+      setResponse(bodyText || '');
     } catch (err) {
-      setResponse(`Error: ${err.message}`);
+      setResponseMeta(null);
+      setResponse(`Error: ${err.message || 'Unknown Error'}`);
     } finally {
       setLoading(false);
     }
@@ -1367,9 +1396,17 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                     )}
                   </div>
                   {response&&!loading&&responseView==='response'&&(<>
-                    <span className="cm-response-status" style={{color:STATUS_COLOR[2]}}>200 OK</span>
-                    <span className="cm-response-time">142ms</span>
-                    <span className="cm-response-size">0.8 KB</span>
+                    {responseMeta ? (
+                      <>
+                        <span className="cm-response-status" style={{color: STATUS_COLOR[responseMeta.status_code?.toString()?.[0]] || '#a1a1aa'}}>
+                          {responseMeta.status_code} {responseMeta.status_text}
+                        </span>
+                        <span className="cm-response-time">{responseMeta.time || 0}ms</span>
+                        <span className="cm-response-size">{responseMeta.size ? (responseMeta.size / 1024).toFixed(2) : 0} KB</span>
+                      </>
+                    ) : (
+                      <span className="cm-response-status" style={{color:'#a1a1aa'}}>Done</span>
+                    )}
                   </>)}
                 </div>
                 {response&&!loading&&responseView==='response'&&(

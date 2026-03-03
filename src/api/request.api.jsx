@@ -58,3 +58,15 @@ export async function updateRequestNote(requestId, note) {
   });
   return body.data;
 }
+
+/**
+ * Execute a request
+ * POST /api/requests/:id/hit
+ */
+export async function hitRequest(requestId) {
+  const body = await apiClient(`/api/requests/${requestId}/hit`, {
+    method: 'POST',
+    auth: true,
+  });
+  return body; // returning full body just in case
+}
