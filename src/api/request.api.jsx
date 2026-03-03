@@ -68,5 +68,5 @@ export async function hitRequest(requestId) {
     method: 'POST',
     auth: true,
   });
-  return body; // returning full body just in case
+  return body.data;
 }

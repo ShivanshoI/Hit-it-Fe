@@ -39,6 +39,108 @@ const MOCK_INVITEES = [
   { id: 2, name: 'Dev Kumar',    initial: 'D', email: 'dev@hitit.dev',    permission: 'read-write' },
 ];
 
+// ─── Utility: Parse curl Command ──────────────────────────────────────────────
+const parseCurlCommand = (curlStr) => {
+  const result = { method: 'GET', url: '', headers: [], auth: 'No Auth', token: '', body: '', isCurl: true };
+  if (!curlStr.trim().startsWith('curl ')) return { isCurl: false };
+
+  // Strip any trailing backslash newline indicators from the pasted command
+  const cleanedStr = curlStr.replace(/\\\n/g, ' ');
+
+  const regex = /(?:[^\s"']+|"[^"]*"|'[^']*')+/g;
+  let args = [];
+  let match;
+  while ((match = regex.exec(cleanedStr)) !== null) {
+      if (match[0] !== '\\') args.push(match[0]);
+  }
+
+  let i = 1;
+  while (i < args.length) {
+    const arg = args[i].replace(/^['"]|['"]$/g, '');
+    
+    if (!arg.startsWith('-') && arg !== '\\' && !result.url && arg.startsWith('http')) {
+      result.url = arg;
+      i++;
+      continue;
+    }
+
+    if (arg === '-X' || arg === '--request') {
+      if (i + 1 < args.length) {
+        result.method = args[i+1].replace(/^['"]|['"]$/g, '').toUpperCase();
+        i++;
+      }
+    } else if (arg === '-H' || arg === '--header') {
+      if (i + 1 < args.length) {
+        const headerStr = args[i+1].replace(/^['"]|['"]$/g, '');
+        const sep = headerStr.indexOf(':');
+        if (sep > 0) {
+          const key = headerStr.substring(0, sep).trim();
+          const val = headerStr.substring(sep + 1).trim();
+          
+          if (key.toLowerCase() === 'authorization') {
+            if (val.toLowerCase().startsWith('bearer ')) {
+              result.auth = 'Bearer Token';
+              result.token = val.substring(7);
+            } else if (val.toLowerCase().startsWith('basic ')) {
+              result.auth = 'Basic Auth';
+              result.token = val.substring(6);
+            } else {
+               result.headers.push({ k: key, v: val });
+            }
+          } else {
+            result.headers.push({ k: key, v: val });
+          }
+        }
+        i++;
+      }
+    } else if (arg === '-d' || arg === '--data' || arg === '--data-raw' || arg === '--data-binary') {
+      if (i + 1 < args.length) {
+        result.body = args[i+1].replace(/^['"]|['"]$/g, '');
+        if (result.method === 'GET') result.method = 'POST';
+        i++;
+      }
+    }
+    i++;
+  }
+  return result;
+};
+
+// ─── Utility: Generate curl Command ───────────────────────────────────────────
+const generateCurlCommand = (method, url, headers, auth, token, body, params) => {
+  let finalUrl = url || '';
+  
+  if (params && params.length > 0) {
+    const query = params.filter(p => p.k).map(p => `${encodeURIComponent(p.k)}=${encodeURIComponent(p.v || '')}`).join('&');
+    if (query) {
+      finalUrl += (finalUrl.includes('?') ? '&' : '?') + query;
+    }
+  }
+
+  let curl = `curl '${finalUrl}'`;
+  
+  if (method && method !== 'GET') {
+    curl += ` \\\n  -X '${method}'`;
+  }
+
+  const validHeaders = (headers || []).filter(h => h.k && h.v);
+  for (const h of validHeaders) {
+    curl += ` \\\n  -H '${h.k}: ${h.v}'`;
+  }
+
+  if (auth === 'Bearer Token' && token) {
+    curl += ` \\\n  -H 'Authorization: Bearer ${token}'`;
+  } else if (auth === 'Basic Auth' && token) {
+    curl += ` \\\n  -H 'Authorization: Basic ${token}'`;
+  }
+
+  if (body) {
+    const safeBody = body.replace(/'/g, "'\\''");
+    curl += ` \\\n  --data-raw '${safeBody}'`;
+  }
+
+  return curl;
+};
+
 // ─── Method Badge ─────────────────────────────────────────────────────────────
 function MethodBadge({ method, small }) {
   const s = METHOD_STYLE[method] || METHOD_STYLE.GET;
@@ -1235,8 +1337,45 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                   </div>
                 )}
               </div>
-              <input className="cm-url-input" value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://api.example.com/endpoint"/>
-              <button className="cm-send-btn" onClick={handleSend} disabled={loading}>
+              <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input 
+                  className="cm-url-input" 
+                  style={{ width: '100%', paddingRight: '2.5rem' }}
+                  value={url} 
+                  onChange={e => {
+                    const val = e.target.value;
+                    const parsed = parseCurlCommand(val);
+                    if (parsed.isCurl) {
+                      setUrl(parsed.url);
+                      setMethod(parsed.method);
+                      setKvState(prev => ({
+                        ...prev,
+                        headers: parsed.headers,
+                        auth: parsed.auth,
+                        token: parsed.token,
+                        body: parsed.body || ''
+                      }));
+                    } else {
+                      setUrl(val);
+                    }
+                  }} 
+                  placeholder="https://api.example.com/endpoint or paste 'curl ...'"
+                />
+                <button 
+                  className="cm-icon-btn" 
+                  title="View & Edit as cURL"
+                  onClick={() => {
+                    setGeneratedCurl(generateCurlCommand(method, url, kvState.headers, kvState.auth, kvState.token, kvState.body, kvState.params));
+                    setShowCurlModal(true);
+                  }}
+                  style={{ position: 'absolute', right: '0.4rem', width: '26px', height: '26px', color: 'var(--text-dim)' }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 11L2 8l3-3M11 11l3-3-3-3M9 2.5l-2 11"/>
+                  </svg>
+                </button>
+              </div>
+              <button className="cm-send-btn" onClick={handleSend} disabled={loading} style={{ flexShrink: 0 }}>
                 {loading ? <span className="cm-spin"/> : <>Send <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 5.5h9M6.5 2l3.5 3.5L6.5 9"/></svg></>}
               </button>
             </div>

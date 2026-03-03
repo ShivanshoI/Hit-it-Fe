@@ -4,6 +4,7 @@ import NewCollectionModal from '../components/NewCollectionModal';
 import ImportModal from '../components/ImportModal';
 import { useMockApi } from '../components/MockApiProvider';
 import { getCollections, getCollection, createCollection, updateCollection, deleteCollection, toggleFavoriteCollection, getFavoriteCollections, getSharedCollections } from '../api/homePage.api';
+import { getHistory } from '../api/history.api';
 import './HomePage.css';
 
 // ─── Initial Data (now lives in state so it's mutable) ────────────────────────
@@ -226,6 +227,11 @@ function Sidebar({ user, onLogout, active, setActive }) {
         <path d="M12 5.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM4 11.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM15 11.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM4 10l5-3M11 7l3.5 3.5"/>
       </svg>
     )},
+    { id: 'history', label: 'History', icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="8" cy="8" r="6"/><path d="M8 4v4l2.5 2.5"/>
+      </svg>
+    )},
     { id: 'envs', label: 'Environments', icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
         <circle cx="8" cy="8" r="6"/><path d="M8 2a9 9 0 010 12M2 8h12"/>
@@ -298,10 +304,28 @@ export default function HomePage({ user, onLogout }) {
   const [importOpen, setImportOpen]           = useState(false);
 
   const [activeTab, setActiveTab]             = useState('home');
+  const [historyItems, setHistoryItems]       = useState([]);
 
   useEffect(() => {
-    fetchCollections(1, true);
+    if (activeTab === 'history') {
+      fetchHistory();
+    } else {
+      fetchCollections(1, true);
+    }
   }, [user?.id, activeTab]);
+
+  const fetchHistory = async () => {
+    if (!user?.id) return;
+    try {
+      setLoading(true);
+      const data = await getHistory();
+      setHistoryItems(Array.isArray(data) ? data : (data?.history || []));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchCollections = async (pageNumber, isReset = false) => {
     if (!user?.id) return;
@@ -447,7 +471,9 @@ export default function HomePage({ user, onLogout }) {
         {/* Top bar */}
         <header className="hp-topbar">
           <div className="hp-topbar-left">
-            <h1 className="hp-page-title">Collections</h1>
+            <h1 className="hp-page-title">
+              {activeTab === 'history' ? 'Execution History' : 'Collections'}
+            </h1>
           </div>
           {(activeTab === 'home' || activeTab === 'collections') && (
             <div className="hp-topbar-right" style={{ display: 'flex', gap: '8px' }}>
@@ -467,75 +493,115 @@ export default function HomePage({ user, onLogout }) {
           )}
         </header>
 
-        {/* Toolbar: search + sort */}
-        <div className="hp-toolbar">
-          <div className="hp-search-wrap">
-            <svg className="hp-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
-              <circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5l3 3"/>
-            </svg>
-            <input
-              className="hp-search"
-              type="text"
-              placeholder="Search collections, tags…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-            {search && (
-              <button className="hp-search-clear" onClick={() => setSearch('')}>×</button>
-            )}
-          </div>
-
-          <div className="hp-sort-wrap">
-            <button className="hp-sort-btn" onClick={() => setSortOpen(!sortOpen)}>
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                <path d="M1 3h11M3 6.5h7M5 10h3"/>
-              </svg>
-              {sort}
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                <path d={sortOpen ? "M2 7l3-3 3 3" : "M2 3l3 3 3-3"}/>
-              </svg>
-            </button>
-            {sortOpen && (
-              <div className="hp-sort-dropdown">
-                {SORT_OPTIONS.map(opt => (
-                  <button
-                    key={opt}
-                    className={`hp-sort-option ${sort === opt ? 'active' : ''}`}
-                    onClick={() => { setSort(opt); setSortOpen(false); }}
-                  >
-                    {sort === opt && (
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <path d="M2 5l2.5 2.5L8 3"/>
-                      </svg>
-                    )}
-                    {opt}
-                  </button>
+        {activeTab === 'history' ? (
+          <div className="hp-history-view" style={{ padding: '0 2.4rem 3rem' }}>
+            {loading ? (
+              <div style={{ textAlign: 'center', marginTop: '24px', color: '#6b7280' }}>Loading history...</div>
+            ) : historyItems.length === 0 ? (
+              <div className="hp-empty">
+                <div className="hp-empty-icon">◷</div>
+                <p>No execution history found</p>
+              </div>
+            ) : (
+              <div className="hp-history-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', marginTop: '1rem' }}>
+                {historyItems.map((h, i) => (
+                  <div key={h.id || i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '1rem 1.4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s', cursor: 'default' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '0.2rem 0.5rem', borderRadius: '4px', letterSpacing: '0.05em', background: METHOD_COLORS[h.method]?.bg || 'rgba(255,255,255,0.1)', color: METHOD_COLORS[h.method]?.text || '#fff' }}>
+                          {h.method || 'GET'}
+                        </span>
+                        <span style={{ fontSize: '0.9rem', color: 'var(--text)', fontWeight: 600 }}>{h.url || 'Unknown URL'}</span>
+                      </div>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="1.5" y="2.5" width="9" height="8" rx="1.5"/><path d="M4 1.5v2M8 1.5v2M1.5 5.5h9"/></svg>
+                        {new Date(h.executed_at || Date.now()).toLocaleString()}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.88rem', fontWeight: 700, color: (h.status_code >= 400 ? '#ef4444' : '#10b981') }}>
+                        {h.status_code || 200}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', background: 'var(--bg-2)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
+                        {h.response_time_ms || 0} ms
+                      </span>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
           </div>
+        ) : (
+          <>
+            {/* Toolbar: search + sort */}
+            <div className="hp-toolbar">
+              <div className="hp-search-wrap">
+                <svg className="hp-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+                  <circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5l3 3"/>
+                </svg>
+                <input
+                  className="hp-search"
+                  type="text"
+                  placeholder="Search collections, tags…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+                {search && (
+                  <button className="hp-search-clear" onClick={() => setSearch('')}>×</button>
+                )}
+              </div>
 
-          <span className="hp-count">{filtered.length} collection{filtered.length !== 1 ? 's' : ''}</span>
-          {activeTab !== 'favorites' && currentFavCount > 0 && (
-            <button
-              className={`hp-fav-filter${showFavOnly ? ' active' : ''}`}
-              onClick={() => setShowFavOnly(v => !v)}
-              title={showFavOnly ? 'Show all collections' : 'Show favourites only'}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24"
-                fill={showFavOnly ? '#f59e0b' : 'none'}
-                stroke={showFavOnly ? '#f59e0b' : 'currentColor'}
-                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              >
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-              </svg>
-              Favourites ({currentFavCount})
-            </button>
-          )}
-        </div>
+              <div className="hp-sort-wrap">
+                <button className="hp-sort-btn" onClick={() => setSortOpen(!sortOpen)}>
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                    <path d="M1 3h11M3 6.5h7M5 10h3"/>
+                  </svg>
+                  {sort}
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                    <path d={sortOpen ? "M2 7l3-3 3 3" : "M2 3l3 3 3-3"}/>
+                  </svg>
+                </button>
+                {sortOpen && (
+                  <div className="hp-sort-dropdown">
+                    {SORT_OPTIONS.map(opt => (
+                      <button
+                        key={opt}
+                        className={`hp-sort-option ${sort === opt ? 'active' : ''}`}
+                        onClick={() => { setSort(opt); setSortOpen(false); }}
+                      >
+                        {sort === opt && (
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                            <path d="M2 5l2.5 2.5L8 3"/>
+                          </svg>
+                        )}
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-        {/* Grid */}
-        <div className="hp-grid">
+              <span className="hp-count">{filtered.length} collection{filtered.length !== 1 ? 's' : ''}</span>
+              {activeTab !== 'favorites' && currentFavCount > 0 && (
+                <button
+                  className={`hp-fav-filter${showFavOnly ? ' active' : ''}`}
+                  onClick={() => setShowFavOnly(v => !v)}
+                  title={showFavOnly ? 'Show all collections' : 'Show favourites only'}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24"
+                    fill={showFavOnly ? '#f59e0b' : 'none'}
+                    stroke={showFavOnly ? '#f59e0b' : 'currentColor'}
+                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  >
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                  Favourites ({currentFavCount})
+                </button>
+              )}
+            </div>
+
+            {/* Grid */}
+            <div className="hp-grid">
           {filtered.map((c, i) => (
             <CollectionCard
               key={c.id}
@@ -586,18 +652,20 @@ export default function HomePage({ user, onLogout }) {
           </div>
         )}
 
-        {filtered.length === 0 && (
-          <div className="hp-empty">
-            <div className="hp-empty-icon">⊘</div>
-            {activeTab === 'shared' ? (
-              <p>No file shared with you</p>
-            ) : (
-              <>
-                <p>No collections match <strong>"{search}"</strong></p>
-                <button className="hp-empty-clear" onClick={() => setSearch('')}>Clear search</button>
-              </>
+            {filtered.length === 0 && (
+              <div className="hp-empty">
+                <div className="hp-empty-icon">⊘</div>
+                {activeTab === 'shared' ? (
+                  <p>No file shared with you</p>
+                ) : (
+                  <>
+                    <p>No collections match <strong>"{search}"</strong></p>
+                    <button className="hp-empty-clear" onClick={() => setSearch('')}>Clear search</button>
+                  </>
+                )}
+              </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
