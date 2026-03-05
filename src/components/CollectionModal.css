@@ -1377,8 +1377,47 @@
 .cm-share-invite-btn:disabled { opacity: 0.4; }
 
 /* Collaborator list */
-.cm-share-collaborators {
+.cm-share-collaborators-wrap {
   border-top: 1px solid var(--border);
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cm-share-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2rem 0;
+  color: var(--text-dim);
+}
+
+.cm-share-loader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.cm-share-loading-text {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.cm-share-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 0.5rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.cm-share-collaborators {
   max-height: 180px; overflow-y: auto;
 }
 .cm-share-collaborators::-webkit-scrollbar { width: 3px; }

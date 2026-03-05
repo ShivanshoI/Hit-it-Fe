@@ -2,7 +2,7 @@ import GlobalStore from './GlobalStore';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useMockApi } from './MockApiProvider';
 import { createCollectionRequest, updateCollectionRequest, getCollectionRequestsSummary, getRequestDetails, updateRequestNote, hitRequest, toggleRequestFavorite } from '../api/request.api';
-import { exportCollaborators } from '../api/collaborators.api';
+import { exportCollaborators, getCollaborators } from '../api/collaborators.api';
 import { getActivities, sendActivity, resolveIssueApi, queryAiAssistant } from '../api/activity_feed.api';
 import { tokenStore } from '../api';
 import './CollectionModal.css';
@@ -719,7 +719,8 @@ function SharePanel({ collection, activeCurl, onClose }) {
   const [permission, setPermission]     = useState('read-only');  // 'read-only'  | 'read-write'
   const [shareAsNew, setShareAsNew]     = useState(false);
   const [copied, setCopied]             = useState(false);
-  const [invitees, setInvitees]         = useState(MOCK_INVITEES);
+  const [invitees, setInvitees]         = useState([]);
+  const [loadingCollabs, setLoadingCollabs] = useState(false);
   const [emailDraft, setEmailDraft]     = useState('');
   const [invPerm, setInvPerm]           = useState('read-only');
   const panelRef                        = useRef(null);
@@ -800,6 +801,40 @@ function SharePanel({ collection, activeCurl, onClose }) {
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [onClose]);
+
+  useEffect(() => {
+    // We only fetch for the collection level for now as per the masterID route
+    const mid = collection?.id;
+    if (!mid) return;
+    
+    const fetchCollabs = async () => {
+      try {
+        setLoadingCollabs(true);
+        const data = await getCollaborators(mid);
+        if (Array.isArray(data)) {
+          // Map backend fields to UI fields
+          const mapped = data.map(c => ({
+            id:         c.user_id,
+            name:       c.name || 'User',
+            email:      c.email_address || '',
+            permission: c.write_permission ? 'read-write' : 'read-only',
+            initial:    (c.name?.[0] || 'U').toUpperCase()
+          }));
+          setInvitees(mapped);
+        } else {
+          // If no data returned, default to empty (or mock for now to keep it visible)
+          setInvitees(MOCK_INVITEES);
+        }
+      } catch (err) {
+        console.error("Failed to fetch collaborators:", err);
+        setInvitees(MOCK_INVITEES); // Fallback to mock for development visibility
+      } finally {
+        // Smooth transitionout
+        setTimeout(() => setLoadingCollabs(false), 500);
+      }
+    };
+    fetchCollabs();
+  }, [collection?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="cm-share-panel" ref={panelRef}>
@@ -897,31 +932,50 @@ function SharePanel({ collection, activeCurl, onClose }) {
       </div>
 
       {/* Collaborator list */}
-      {invitees.length > 0 && (
-        <div className="cm-share-collaborators">
-          <div className="cm-share-collab-head">Shared with {invitees.length}</div>
-          {invitees.map(inv => (
-            <div key={inv.id} className="cm-share-collab">
-              <div className="cm-share-collab-avatar">{inv.initial}</div>
-              <div className="cm-share-collab-info">
-                <span className="cm-share-collab-name">{inv.name}</span>
-                <span className="cm-share-collab-email">{inv.email}</span>
+      <div className="cm-share-collaborators-wrap">
+        {loadingCollabs ? (
+          <div className="cm-share-loading">
+            <div className="cm-share-loader">
+              <span className="cm-spin" style={{ width: '18px', height: '18px', borderTopColor: 'var(--purple)', borderWidth: '2.5px' }} />
+              <div className="cm-loading-dots">
+                <span /> <span /> <span />
               </div>
-              <select
-                className="cm-share-inv-select cm-share-inv-select--inline"
-                value={inv.permission}
-                onChange={e => changeInviteePerm(inv.id, e.target.value)}
-              >
-                <option value="read-only">Read Only</option>
-                <option value="read-write">Read / Write</option>
-              </select>
-              <button className="cm-share-collab-remove" onClick={() => removeInvitee(inv.id)}>
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 1l8 8M9 1L1 9"/></svg>
-              </button>
             </div>
-          ))}
-        </div>
-      )}
+            <span className="cm-share-loading-text">Fetching collaborators...</span>
+          </div>
+        ) : invitees.length > 0 ? (
+          <div className="cm-share-collaborators">
+            <div className="cm-share-collab-head">Shared with {invitees.length}</div>
+            {invitees.map(inv => (
+              <div key={inv.id} className="cm-share-collab">
+                <div className="cm-share-collab-avatar">{inv.initial || (inv.name ? inv.name[0].toUpperCase() : 'U')}</div>
+                <div className="cm-share-collab-info">
+                  <span className="cm-share-collab-name">{inv.name || inv.email?.split('@')[0]}</span>
+                  <span className="cm-share-collab-email">{inv.email}</span>
+                </div>
+                <select
+                  className="cm-share-inv-select cm-share-inv-select--inline"
+                  value={inv.permission}
+                  onChange={e => changeInviteePerm(inv.id, e.target.value)}
+                >
+                  <option value="read-only">Read Only</option>
+                  <option value="read-write">Read / Write</option>
+                </select>
+                <button className="cm-share-collab-remove" onClick={() => removeInvitee(inv.id)}>
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 1l8 8M9 1L1 9"/></svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="cm-share-empty">
+             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{opacity: 0.3, marginBottom: '0.4rem'}}>
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+             </svg>
+             <span>No direct collaborators yet.</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

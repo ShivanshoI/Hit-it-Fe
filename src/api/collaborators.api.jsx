@@ -17,3 +17,10 @@ export async function exportCollaborators(payload) {
   });
   return response?.data || response;
 }
+export async function getCollaborators(masterID) {
+  const response = await apiClient(`/api/collaborators/${masterID}`, {
+    method: 'GET',
+    auth: true,
+  });
+  return response?.data || response;
+}
