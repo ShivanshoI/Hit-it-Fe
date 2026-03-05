@@ -204,17 +204,16 @@ function NewCard({ style, onClick }) {
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
-function Sidebar({ user, onLogout, active, setActive }) {
+function Sidebar({ user, onLogout, active, setActive, onQuicky }) {
   const navItems = [
     { id: 'home', label: 'Home', icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <path d="M2 6.5L8 2l6 4.5V14a1 1 0 01-1 1H3a1 1 0 01-1-1V6.5z"/>
       </svg>
     )},
-    { id: 'collections', label: 'Collections', icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/>
-        <rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>
+    { id: 'quicky', label: 'Quicky', icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m13 2-10 12h9l-1 8 10-12h-9l1-8z"/>
       </svg>
     )},
     { id: 'favorites', label: 'Favorites', icon: (
@@ -255,8 +254,14 @@ function Sidebar({ user, onLogout, active, setActive }) {
         {navItems.map(item => (
           <button
             key={item.id}
-            className={`hp-nav-item ${active === item.id ? 'active' : ''}`}
-            onClick={() => setActive(item.id)}
+            className={`hp-nav-item ${active === item.id ? 'active' : ''} ${item.id === 'quicky' ? 'hp-nav-item--quicky' : ''}`}
+            onClick={() => {
+              if (item.id === 'quicky') {
+                onQuicky?.();
+              } else {
+                setActive(item.id);
+              }
+            }}
           >
             {item.icon}
             <span>{item.label}</span>
@@ -308,18 +313,27 @@ export default function HomePage({ user, onLogout }) {
 
   useEffect(() => {
     if (activeTab === 'history') {
-      fetchHistory();
+      fetchHistory(1, true);
     } else {
       fetchCollections(1, true);
     }
   }, [user?.id, activeTab]);
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (pageNumber = 1, isReset = false) => {
     if (!user?.id) return;
     try {
       setLoading(true);
-      const data = await getHistory();
-      setHistoryItems(Array.isArray(data) ? data : (data?.history || []));
+      const data = await getHistory(pageNumber, 20);
+      const history = Array.isArray(data) ? data : (data?.history || []);
+      
+      setHasMore(history.length === 50);
+      
+      if (isReset) {
+        setHistoryItems(history);
+      } else {
+        setHistoryItems(prev => [...prev, ...history]);
+      }
+      setPage(pageNumber);
     } catch (err) {
       console.error(err);
     } finally {
@@ -410,6 +424,26 @@ export default function HomePage({ user, onLogout }) {
     return collections.filter(c => favCollections.has(c.id)).length;
   }, [collections, favCollections]);
 
+  const handleQuicky = () => {
+    // Open the modal with a special "Quicky" collection
+    // This allows it to open immediately independent of existing collections
+    setSelectedCollection({
+      id: 'quicky',
+      name: 'Quick Request',
+      isQuicky: true,
+      requests: [{
+        id: 'quicky-req',
+        name: 'Untitled Request',
+        method: 'GET',
+        url: '',
+        headers: [],
+        params: [],
+        body: '',
+        auth: 'No Auth'
+      }]
+    });
+  };
+
   // ── Handlers ────────────────────────────────────────────────────────────────
   const openNewCollectionModal = () => {
     setEditingColl(null);
@@ -465,7 +499,13 @@ export default function HomePage({ user, onLogout }) {
 
   return (
     <div className="hp-root">
-      <Sidebar user={user} onLogout={onLogout} active={activeTab} setActive={setActiveTab} />
+      <Sidebar 
+        user={user} 
+        onLogout={onLogout} 
+        active={activeTab} 
+        setActive={setActiveTab} 
+        onQuicky={handleQuicky} 
+      />
 
       <div className="hp-main">
         {/* Top bar */}
@@ -627,22 +667,32 @@ export default function HomePage({ user, onLogout }) {
         {/* Pagination Controls */}
         {!loading && hasMore && (
           <div className="hp-pagination" style={{ display: 'flex', justifyContent: 'center', marginTop: '24px', paddingBottom: '24px' }}>
-            {collections.length < 20 ? (
+            {activeTab === 'history' ? (
               <button 
                 className="hp-btn-load-more" 
-                style={{ padding: '8px 16px', borderRadius: '6px', background: '#3b82f6', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500 }}
-                onClick={() => fetchCollections(page + 1)}
+                style={{ padding: '8px 16px', borderRadius: '6px', background: 'var(--purple)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500 }}
+                onClick={() => fetchHistory(page + 1)}
               >
-                Load More
+                Load More History
               </button>
             ) : (
-              <button 
-                className="hp-btn-next" 
-                style={{ padding: '8px 16px', borderRadius: '6px', background: '#10b981', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500 }}
-                onClick={() => fetchCollections(page + 1, true)}
-              >
-                Next
-              </button>
+              collections.length < 20 ? (
+                <button 
+                  className="hp-btn-load-more" 
+                  style={{ padding: '8px 16px', borderRadius: '6px', background: '#3b82f6', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500 }}
+                  onClick={() => fetchCollections(page + 1)}
+                >
+                  Load More
+                </button>
+              ) : (
+                <button 
+                  className="hp-btn-next" 
+                  style={{ padding: '8px 16px', borderRadius: '6px', background: '#10b981', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500 }}
+                  onClick={() => fetchCollections(page + 1, true)}
+                >
+                  Next
+                </button>
+              )
             )}
           </div>
         )}

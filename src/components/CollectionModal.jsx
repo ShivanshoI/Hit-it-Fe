@@ -1,8 +1,10 @@
 import GlobalStore from './GlobalStore';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useMockApi } from './MockApiProvider';
-import { createCollectionRequest, updateCollectionRequest, getCollectionRequestsSummary, getRequestDetails, updateRequestNote, hitRequest } from '../api/request.api';
+import { createCollectionRequest, updateCollectionRequest, getCollectionRequestsSummary, getRequestDetails, updateRequestNote, hitRequest, toggleRequestFavorite } from '../api/request.api';
 import { exportCollaborators } from '../api/collaborators.api';
+import { getActivities, sendActivity, resolveIssueApi, queryAiAssistant } from '../api/activity_feed.api';
+import { tokenStore } from '../api';
 import './CollectionModal.css';
 
 // ─── Per-collection request shape (what the backend will return in future) ────
@@ -29,10 +31,12 @@ const METHOD_STYLE = {
 };
 const STATUS_COLOR = { 2:'#10b981', 3:'#f59e0b', 4:'#ef4444', 5:'#ef4444' };
 const MOCK_RESPONSE = `{\n  "id": "usr_01HX4K9B2M",\n  "name": "Shivansh Yadav",\n  "email": "shivansh@hitit.dev",\n  "role": "admin",\n  "created_at": "2026-01-15T08:32:11Z",\n  "metadata": {\n    "plan": "pro",\n    "requests_this_month": 4821\n  }\n}`;
-const MOCK_COMMENTS = [
-  { id:1, author:'Shivansh', avatar:'S', time:'2h ago',  text:'Auth header must be Bearer — session tokens 401.', resolved:false },
-  { id:2, author:'Priya',    avatar:'P', time:'1d ago',  text:'Rate limit 100 req/min per IP. Add retry logic.',  resolved:true  },
-  { id:3, author:'Dev',      avatar:'D', time:'3d ago',  text:'Response has deprecated `legacy_id` — ignore it.', resolved:false },
+const MOCK_ACTIVITY_FEED = [
+  { id: 2, type: "user_chat", author: "Shivansh", avatar: "S", time: "1h ago", text: "Why is this 401ing?", scope: "group" },
+  { id: 3, type: "issue", author: "Priya", avatar: "P", time: "50m ago", text: "Headers are empty, please fix before deployment.", resolved: false, scope: "group" },
+  { id: 4, type: "ai_assistant", author: "Hit-IT AI", avatar: "✨", time: "45m ago", text: "It seems the request requires a valid JWT token. You can obtain one by hitting the /auth/login endpoint first.", scope: "group" },
+  { id: 5, type: "user_chat", author: "Dev", avatar: "D", time: "10m ago", text: "Fixed it, thanks!", scope: "group" },
+  { id: 6, type: "user_chat", author: "You", avatar: "Y", time: "2d ago", text: "Note to self: refactor this endpoint soon.", scope: "personal" },
 ];
 const MOCK_INVITEES = [
   { id: 1, name: 'Priya Sharma', initial: 'P', email: 'priya@hitit.dev',  permission: 'read-only'  },
@@ -169,7 +173,7 @@ function SharedPicker({ suggestions, onPick, anchor }) {
 }
 
 // ─── KV Row with shared picker ────────────────────────────────────────────────
-function KVRow({ row, sharedSuggestions, onChange, onDelete, onPickShared }) {
+function KVRow({ row, sharedSuggestions, onChange, onDelete, onPickShared, isReadOnly }) {
   const [keyFocus, setKeyFocus] = useState(false);
   const [valFocus, setValFocus] = useState(false);
   const showPicker = (keyFocus || valFocus) && !row.k && sharedSuggestions.length > 0;
@@ -184,6 +188,7 @@ function KVRow({ row, sharedSuggestions, onChange, onDelete, onPickShared }) {
           onChange={e => onChange({ ...row, k: e.target.value })}
           onFocus={() => setKeyFocus(true)}
           onBlur={() => setTimeout(()=>setKeyFocus(false), 150)}
+          disabled={isReadOnly}
         />
         <input
           className={`cm-kv-input${!row.v?' cm-kv-input--empty':''}`}
@@ -192,8 +197,9 @@ function KVRow({ row, sharedSuggestions, onChange, onDelete, onPickShared }) {
           onChange={e => onChange({ ...row, v: e.target.value })}
           onFocus={() => setValFocus(true)}
           onBlur={() => setTimeout(()=>setValFocus(false), 150)}
+          disabled={isReadOnly}
         />
-        <button className="cm-kv-del" onClick={onDelete}>×</button>
+        {!isReadOnly && <button className="cm-kv-del" onClick={onDelete}>×</button>}
       </div>
       {showPicker && (
         <SharedPicker
@@ -214,6 +220,7 @@ function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename
   const renameRef                     = useRef(null);
 
   const startRename = (curl, e) => {
+    if (curl.write_permission === false) return;
     e.stopPropagation();
     setEditingId(curl.id);
     setDraftName(curl.name);
@@ -224,6 +231,59 @@ function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename
     const trimmed = draftName.trim();
     if (trimmed && trimmed !== curl.name) onRename(curl.id, trimmed);
     setEditingId(null);
+  };
+
+  const favRequests = curls.filter(c => favCurls?.has(c.id));
+  const otherRequests = curls.filter(c => !favCurls?.has(c.id));
+
+  const renderCurl = (curl, i) => {
+    const isFav = favCurls?.has(curl.id);
+    const isShadow = shadowHistory?.find(s => s.id === curl.id);
+    const shadowIdx = shadowHistory?.findIndex(s => s.id === curl.id);
+    const shadowOpacities = [0.25, 0.12]; // Shadow 1 (recent), Shadow 2 (older)
+    const shadowStyle = isShadow ? { backgroundColor: `rgba(59, 130, 246, ${shadowOpacities[shadowIdx] || 0.05})`, borderLeft: `2px solid rgba(59, 130, 246, ${shadowOpacities[shadowIdx] * 4})` } : {};
+
+    return (
+      <div
+        key={curl.id}
+        className={`cm-curl-item${activeCurl?.id===curl.id?' active':''}${isFav?' cm-curl-item--fav':''}${isShadow?' cm-curl-item--shadow':''}`}
+        style={{ animationDelay: open ? `${i*0.04}s` : '0s', ...shadowStyle }}
+        onClick={() => editingId !== curl.id && onSelect(curl)}
+        title={isShadow ? `Shadow memory #${shadowIdx+1}` : ''}
+      >
+        <MethodBadge method={curl.method} small />
+        {editingId === curl.id ? (
+          <input
+            ref={renameRef}
+            className="cm-curl-item-rename"
+            value={draftName}
+            onChange={e => setDraftName(e.target.value)}
+            onBlur={() => commitRename(curl)}
+            onKeyDown={e => {
+              if (e.key === 'Enter')  { e.preventDefault(); commitRename(curl); }
+              if (e.key === 'Escape') { setEditingId(null); }
+            }}
+            onClick={e => e.stopPropagation()}
+          />
+        ) : (
+          <span
+            className="cm-curl-item-name"
+            onDoubleClick={e => startRename(curl, e)}
+            title="Double-click to rename"
+          >{curl.name}</span>
+        )}
+        <button
+          className={`cm-fav-btn${isFav ? ' cm-fav-btn--on' : ''}`}
+          title={isFav ? 'Remove from favourites' : 'Add to favourites'}
+          onClick={e => { e.stopPropagation(); onToggleFav?.(curl.id); }}
+          aria-label={isFav ? 'Unfavourite' : 'Favourite'}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill={isFav ? '#f59e0b' : 'none'} stroke={isFav ? '#f59e0b' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -249,55 +309,18 @@ function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename
             <button className="cm-curl-empty-add" onClick={onAdd}>+ Add one</button>
           </div>
         )}
-        {!fetchingSummaries && curls.map((curl, i) => {
-          const isFav = favCurls?.has(curl.id);
-          const isShadow = shadowHistory?.find(s => s.id === curl.id);
-          const shadowIdx = shadowHistory?.findIndex(s => s.id === curl.id);
-          const shadowOpacities = [0.15, 0.08]; // Shadow 1 (recent), Shadow 2 (older)
-          const shadowStyle = isShadow ? { backgroundColor: `rgba(59, 130, 246, ${shadowOpacities[shadowIdx] || 0.05})`, borderLeft: `2px solid rgba(59, 130, 246, ${shadowOpacities[shadowIdx] * 3})` } : {};
-
-          return (
-            <div
-              key={curl.id}
-              className={`cm-curl-item${activeCurl?.id===curl.id?' active':''}${isFav?' cm-curl-item--fav':''}${isShadow?' cm-curl-item--shadow':''}`}
-              style={{ animationDelay: open ? `${i*0.04}s` : '0s', ...shadowStyle }}
-              onClick={() => editingId !== curl.id && onSelect(curl)}
-              title={isShadow ? `Shadow memory #${shadowIdx+1}` : ''}
-            >
-              <MethodBadge method={curl.method} small />
-              {editingId === curl.id ? (
-                <input
-                  ref={renameRef}
-                  className="cm-curl-item-rename"
-                  value={draftName}
-                  onChange={e => setDraftName(e.target.value)}
-                  onBlur={() => commitRename(curl)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter')  { e.preventDefault(); commitRename(curl); }
-                    if (e.key === 'Escape') { setEditingId(null); }
-                  }}
-                  onClick={e => e.stopPropagation()}
-                />
-              ) : (
-                <span
-                  className="cm-curl-item-name"
-                  onDoubleClick={e => startRename(curl, e)}
-                  title="Double-click to rename"
-                >{curl.name}</span>
-              )}
-              <button
-                className={`cm-fav-btn${isFav ? ' cm-fav-btn--on' : ''}`}
-                title={isFav ? 'Remove from favourites' : 'Add to favourites'}
-                onClick={e => { e.stopPropagation(); onToggleFav?.(curl.id); }}
-                aria-label={isFav ? 'Unfavourite' : 'Favourite'}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill={isFav ? '#f59e0b' : 'none'} stroke={isFav ? '#f59e0b' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-              </button>
-            </div>
-          );
-        })}
+        {!fetchingSummaries && favRequests.length > 0 && (
+          <>
+            <div className="cm-curl-group-label" style={{ fontSize: '11px', textTransform: 'uppercase', color: '#9ca3af', margin: '4px 12px 6px', fontWeight: 600, letterSpacing: '0.5px' }}>Favorites</div>
+            {favRequests.map((curl, i) => renderCurl(curl, i))}
+          </>
+        )}
+        {!fetchingSummaries && otherRequests.length > 0 && (
+          <>
+            {favRequests.length > 0 && <div className="cm-curl-group-label" style={{ fontSize: '11px', textTransform: 'uppercase', color: '#9ca3af', margin: '16px 12px 6px', fontWeight: 600, letterSpacing: '0.5px' }}>Other Requests</div>}
+            {otherRequests.map((curl, i) => renderCurl(curl, favRequests.length + i))}
+          </>
+        )}
       </div>
 
       {/* Globals reference — read-only, defined in dashboard sidebar */}
@@ -338,71 +361,301 @@ function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename
   );
 }
 
-// ─── Comments Panel ───────────────────────────────────────────────────────────
-function CommentsPanel({ open, onClose, collectionId }) {
-  const { mockApiHit } = useMockApi();
-  const [comments, setComments] = useState(MOCK_COMMENTS);
+// ─── Activity Feed Panel (Collection Mission Control) ─────────────────────────
+function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState('');
-  const [showResolved, setShowResolved] = useState(false);
-  const visible = comments.filter(c => showResolved || !c.resolved);
+  const [mode, setMode] = useState('group'); // 'group' | 'personal'
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   
-  const addComment = async () => {
-    if (!draft.trim()) return;
-    try {
-      const newComment = await mockApiHit('POST', `/api/collections/${collectionId}/comments`, { 
-        id:Date.now(), author:'You', avatar:'Y', time:'just now', text:draft.trim(), resolved:false 
-      });
-      setComments(p => [...p, newComment]);
-      setDraft('');
-    } catch (err) {
-      console.error(err);
+  const listRef = useRef(null);
+  const wsRef   = useRef(null);
+  
+  // Track old scroll height for prepending items
+  const lastScrollHeight = useRef(0);
+
+  const scrollToBottom = () => {
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   };
 
-  const resolveComment = async (id) => {
+  // ── Load First Page (resets when mode/collection changes)
+  useEffect(() => {
+    if (!open || !collectionId) return;
+    
+    const loadInitial = async () => {
+      setLoading(true);
+      try {
+        setPage(1);
+        setHasMore(true);
+        const data = await getActivities(collectionId, mode, 1, 20);
+        const activities = Array.isArray(data) ? data : (data?.activities || []);
+        setItems(activities);
+        if (activities.length < 20) setHasMore(false);
+      } catch (err) {
+        console.error("Failed to load activities:", err);
+      } finally {
+        setLoading(false);
+        setTimeout(scrollToBottom, 50);
+      }
+    };
+    loadInitial();
+  }, [collectionId, mode, open]);
+
+  const fetchNextPage = async () => {
+    if (loading || !hasMore) return;
     try {
-      await mockApiHit('PATCH', `/api/comments/${id}`, { resolved: true });
-      setComments(p => p.map(x => x.id === id ? { ...x, resolved: true } : x));
+      setLoading(true);
+      if (listRef.current) lastScrollHeight.current = listRef.current.scrollHeight;
+      
+      const nextPage = page + 1;
+      const data = await getActivities(collectionId, mode, nextPage, 20);
+      const activities = Array.isArray(data) ? data : (data?.activities || []);
+      
+      if (activities.length < 20) setHasMore(false);
+      
+      setItems(prev => [...activities, ...prev]); // Prepend older items
+      setPage(nextPage);
+
+      // Restore scroll position after prepending
+      setTimeout(() => {
+        if (listRef.current) {
+          listRef.current.scrollTop = listRef.current.scrollHeight - lastScrollHeight.current;
+        }
+      }, 50);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load more activities:", err);
+    } finally {
+      setLoading(false);
     }
   };
+
+  // ── WebSocket for real-time 
+  useEffect(() => {
+    if (!open || !collectionId) return;
+
+    const token = tokenStore.get();
+    const wsUrl = `ws://localhost:8080/api/feed/ws/${collectionId}?token=${token}`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      try {
+         const activity = JSON.parse(event.data);
+         // Only append if it matches our current scope 
+         if (activity.scope === mode) {
+            setItems(prev => {
+              // De-duplicate in case we just sent it ourselves 
+              if (prev.find(p => p.id === activity.id)) return prev;
+              return [...prev, activity];
+            });
+            setTimeout(scrollToBottom, 50);
+         }
+      } catch (err) {
+        console.error("WS Message Error:", err);
+      }
+    };
+
+    ws.onclose = () => console.log("WS Closed");
+    ws.onerror = (e) => console.error("WS Error:", e);
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) ws.close();
+    };
+  }, [collectionId, mode, open]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [items, mode]);
+
+  const visible = items; // Backend already filters per mode/scope
+  
+  const handleSend = async () => {
+    if (!draft.trim()) return;
+    const isAiQuery = draft.trim().startsWith('@AI');
+    const isIssue   = draft.trim().startsWith('/issue');
+    const text      = isIssue ? draft.replace('/issue', '').trim() : draft.trim();
+    
+    const optimisticId = `opt-${Date.now()}`;
+    
+    // ── Optimistic Update for instant UI response 
+    const optimisticItem = {
+      id: optimisticId,
+      user_id: currentUser?.id,
+      content: text,
+      type: isIssue ? 'issue' : 'user_chat',
+      scope: mode,
+      created_at: new Date().toISOString()
+    };
+    
+    setItems(p => [...p, optimisticItem]);
+    setDraft(''); // Clear input immediately for UX
+
+    try {
+      if (isAiQuery) {
+        // AI query handles both prompt + response objects in one return 
+        const { user_message, ai_response } = await queryAiAssistant(collectionId, {
+          prompt: text,
+          scope: mode,
+          master_id: collectionId, // Use master_id to match backend expectations
+          context: { url: window.location.href }
+        });
+        // Replace optimistic with real user message + ai response 
+        setItems(p => p.map(item => item.id === optimisticId ? user_message : item).concat(ai_response));
+      } else {
+        const payload = {
+          type: isIssue ? 'issue' : 'user_chat',
+          content: text,
+          text: text, // Send both for compatibility
+          scope: mode
+        };
+        const newActivity = await sendActivity(collectionId, payload);
+        
+        // Merge real backend data but PROTECT the content if backend returns ""
+        setItems(p => p.map(item => {
+          if (item.id === optimisticId) {
+             return {
+               ...newActivity,
+               content: newActivity.content || item.content // Keep optimistic if backend is empty
+             };
+          }
+          return item;
+        }));
+      }
+      setTimeout(scrollToBottom, 50);
+    } catch (err) {
+      console.error("Failed to send message:", err);
+      // Remove the optimistic item if it failed 
+      setItems(p => p.filter(item => item.id !== optimisticId));
+    }
+  };
+
+  const formatActivity = (a) => ({
+    ...a,
+    text:     a.content || a.text || '',
+    resolved: a.is_resolved !== undefined ? a.is_resolved : a.resolved,
+    time:     a.created_at ? new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (a.time || 'just now'),
+    author:   a.author || (a.user_id === currentUser?.id ? 'You' : (a.user_id ? `User ${a.user_id.slice(-4)}` : 'System')),
+    avatar:   a.avatar || (a.user_id === currentUser?.id ? (currentUser?.name?.[0].toUpperCase() || 'Y') : (a.user_id ? a.user_id[0].toUpperCase() : 'S')),
+  });
+
+  const resolveIssue = async (id) => {
+    try {
+      const updated = await resolveIssueApi(id, collectionId);
+      setItems(p => p.map(x => x.id === id ? { ...x, is_resolved: true } : x));
+    } catch (err) {
+      console.error("Failed to resolve issue:", err);
+    }
+  };
+
   return (
     <div className={`cm-comments-panel${open?' cm-comments-panel--open':''}`}>
       <div className="cm-comments-head">
-        <span>Comments</span>
+        <span>Activity Feed</span>
         <div style={{display:'flex',gap:'0.4rem',alignItems:'center'}}>
-          <button className={`cm-resolve-toggle${showResolved?' active':''}`} onClick={()=>setShowResolved(!showResolved)}>Resolved</button>
+          <div className="cm-feed-mode-toggle">
+            <button className={`cm-mode-btn${mode==='group'?' active':''}`} onClick={()=>setMode('group')}>Group</button>
+            <button className={`cm-mode-btn${mode==='personal'?' active':''}`} onClick={()=>setMode('personal')}>Personal</button>
+          </div>
           <button className="cm-icon-btn" onClick={onClose}>
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 1l10 10M11 1L1 11"/></svg>
           </button>
         </div>
       </div>
-      <div className="cm-comments-list">
-        {visible.length===0 && <div className="cm-comments-empty">No comments yet.</div>}
-        {visible.map(c => (
-          <div key={c.id} className={`cm-comment${c.resolved?' cm-comment--resolved':''}`}>
-            <div className="cm-comment-avatar">{c.avatar}</div>
-            <div className="cm-comment-body">
-              <div className="cm-comment-meta">
-                <span className="cm-comment-author">{c.author}</span>
-                <span className="cm-comment-time">{c.time}</span>
-                {c.resolved && <span className="cm-resolved-badge">Resolved</span>}
-              </div>
-              <p className="cm-comment-text">{c.text}</p>
-              {!c.resolved && <button className="cm-resolve-btn" onClick={() => resolveComment(c.id)}>Resolve</button>}
-            </div>
+
+      <div className="cm-comments-list" ref={listRef}>
+        {hasMore && items.length > 0 && (
+          <button 
+            className="cm-feed-load-more" 
+            onClick={fetchNextPage}
+            disabled={loading}
+            style={{ 
+              width: '100%', padding: '0.6rem', background: 'var(--bg-2)', 
+              border: '1px solid var(--border)', borderRadius: '6px', 
+              fontSize: '0.7rem', color: 'var(--purple)', fontWeight: 600,
+              marginBottom: '1rem', cursor: 'pointer', transition: 'all 0.15s'
+            }}
+          >
+            {loading ? 'Loading older messages...' : 'Load older messages'}
+          </button>
+        )}
+        {loading && page === 1 && (
+          <div className="cm-comments-empty" style={{padding: '40px 0'}}>
+            <div className="cm-spin" style={{width:'20px', height:'20px', margin:'0 auto 10px'}} />
+            Loading conversations...
           </div>
-        ))}
+        )}
+        {!loading && visible.length===0 && <div className="cm-comments-empty">No activity yet.</div>}
+        {visible.map(item => {
+          const c = formatActivity(item);
+          if (c.type === 'issue') {
+            return (
+              <div key={c.id} className={`cm-feed-issue${c.resolved?' cm-feed-issue--resolved':''}`}>
+                <div className="cm-feed-issue-head">
+                  <div className="cm-feed-issue-badge">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="5" cy="5" r="4"/></svg>
+                    Issue
+                  </div>
+                  <span className="cm-comment-author">{c.author}</span>
+                  <span className="cm-comment-time">{c.time}</span>
+                </div>
+                <div className="cm-feed-issue-body">{c.text}</div>
+                {!c.resolved && (
+                  <button className="cm-feed-issue-resolve" onClick={() => resolveIssue(c.id)}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M1.5 5l2.5 2.5 5-5"/></svg>
+                    Mark as Resolved
+                  </button>
+                )}
+              </div>
+            );
+          }
+          if (c.type === 'ai_assistant') {
+            return (
+               <div key={c.id} className="cm-feed-ai">
+                <div className="cm-comment-avatar" style={{background: 'linear-gradient(135deg, #7c3aed, #0ea5e9)', color: '#fff'}}>{c.avatar}</div>
+                <div className="cm-comment-body">
+                  <div className="cm-comment-meta">
+                    <span className="cm-comment-author" style={{background: 'linear-gradient(135deg, #7c3aed, #0ea5e9)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'}}>{c.author}</span>
+                    <span className="cm-comment-time">{c.time}</span>
+                  </div>
+                  <p className="cm-comment-text">{c.text}</p>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div key={c.id} className="cm-comment">
+              <div className="cm-comment-avatar">{c.avatar}</div>
+              <div className="cm-comment-body">
+                <div className="cm-comment-meta">
+                  <span className="cm-comment-author">{c.author}</span>
+                  <span className="cm-comment-time">{c.time}</span>
+                </div>
+                <p className="cm-comment-text">{c.text}</p>
+              </div>
+            </div>
+          );
+        })}
       </div>
       <div className="cm-comment-input-wrap">
-        <textarea className="cm-comment-input" placeholder="Add a comment…" value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))addComment();}} rows={2}/>
+        <textarea 
+          className="cm-comment-input" 
+          placeholder={mode === 'personal' ? "Ask AI or leave a private note..." : "Type a message, @AI, or /issue..."} 
+          value={draft} 
+          onChange={e=>setDraft(e.target.value)} 
+          onKeyDown={e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){ e.preventDefault(); handleSend();}}} 
+          rows={2}
+        />
         <div className="cm-comment-actions">
-          <span className="cm-comment-hint">⌘↵ to post</span>
-          <button className="cm-post-btn" onClick={addComment} disabled={!draft.trim()}>Post</button>
+          <span className="cm-comment-hint">
+            <span style={{color: 'var(--purple)', fontWeight: 600}}>@AI</span> {mode === 'group' && <>| <span style={{color: '#f59e0b', fontWeight: 600}}>/issue</span></>}
+          </span>
+          <button className="cm-post-btn" onClick={handleSend} disabled={!draft.trim()}>Send (⌘↵)</button>
         </div>
       </div>
-
     </div>
   );
 }
@@ -779,7 +1032,72 @@ function DiffView({ saveA, saveB, onClear }) {
   );
 }
 
+// ─── Curl Modal (View & Edit as cURL) ──────────────────────────────────────────
+function CurlModal({ curl, onClose, onApply, isReadOnly }) {
+  const [draft, setDraft] = useState(curl);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(draft);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="cm-backdrop" onClick={onClose} style={{ zIndex: 600 }}>
+      <div className="cm-modal" style={{ maxWidth: '600px', height: 'auto', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+        <div className="cm-modal-header">
+          <div className="cm-modal-header-left">
+            <div className="cm-header-icon" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 11L2 8l3-3M11 11l3-3-3-3M9 2.5l-2 11"/>
+              </svg>
+            </div>
+            <div>
+              <h3 className="cm-modal-collection-name" style={{ fontSize: '1rem' }}>cURL Editor</h3>
+              <p className="cm-modal-breadcrumb" style={{ margin: 0 }}>View or modify the raw request as a command</p>
+            </div>
+          </div>
+          <button className="cm-close-btn" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 1l12 12M13 1L1 13"/></svg>
+          </button>
+        </div>
+        <div className="cm-modal-body" style={{ padding: '1.2rem', flexDirection: 'column' }}>
+          <div className="cm-editor-wrap" style={{ flex: 1, minHeight: '200px' }}>
+            <div className="cm-editor-toolbar">
+              <span className="cm-editor-label">Raw cURL Command</span>
+              <button className={`cm-icon-btn-label ${copied ? 'active' : ''}`} onClick={handleCopy} style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}>
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+            <textarea
+              className="cm-editor"
+              style={{ height: '300px', fontSize: '0.85rem', lineHeight: '1.6', color: '#60a5fa' }}
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              spellCheck={false}
+            />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.8rem', marginTop: '1.2rem' }}>
+            <button className="cm-icon-btn-label" onClick={onClose}>Cancel</button>
+            {!isReadOnly && (
+              <button 
+                className="cm-save-btn" 
+                style={{ background: 'var(--purple)', color: '#fff', border: 'none', padding: '0.5rem 1.2rem' }}
+                onClick={() => { onApply(draft); onClose(); }}
+              >
+                Apply Changes
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Modal ───────────────────────────────────────────────────────────────
+
 export default function CollectionModal({ collection, user, onClose, globals = [], setGlobals = () => {}, onCustomize, collections = [], onSelectCollection }) {
   const { mockApiHit } = useMockApi();
   // Each collection owns its own requests — seed from collection.requests (future: from API)
@@ -804,15 +1122,36 @@ export default function CollectionModal({ collection, user, onClose, globals = [
     setSaveListOpen(false);
 
     const loadSummaries = async () => {
+      if (collection.id === 'quicky' || collection.isQuicky) {
+        // Skip fetching for Quicky mode
+        if (collection.requests?.length > 0 && !activeCurl) {
+          handleSelectCurl(collection.requests[0]);
+        }
+        return;
+      }
       try {
         setFetchingSummaries(true);
         const data = await getCollectionRequestsSummary(collection.id);
+        let fetchedRequests = [];
         if (Array.isArray(data)) {
-          setCurls(data);
+          fetchedRequests = data;
         } else if (data && Array.isArray(data.data)) {
-          setCurls(data.data); // Backend returns { data: [...] }
+          fetchedRequests = data.data; // Backend returns { data: [...] }
         } else if (data && Array.isArray(data.requests)) {
-          setCurls(data.requests);
+          fetchedRequests = data.requests;
+        }
+
+        if (fetchedRequests.length > 0) {
+          setCurls(fetchedRequests);
+          // Sync favorite status from the summaries
+          setFavCurls(prev => {
+            const next = new Set(prev);
+            fetchedRequests.forEach(r => {
+              if (r.favorite) next.add(r.id);
+              else next.delete(r.id);
+            });
+            return next;
+          });
         }
       } catch (err) {
         console.error("Failed to fetch request summaries:", err);
@@ -826,8 +1165,8 @@ export default function CollectionModal({ collection, user, onClose, globals = [
 
   const firstCurl = curls[0] || null;
 
-  const [curlPanelOpen, setCurlPanelOpen]     = useState(true);
-  const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
+  const [curlPanelOpen, setCurlPanelOpen]     = useState(() => collection?.isQuicky ? false : true);
+  const [activityPanelOpen, setActivityPanelOpen] = useState(false);
   const [activeCurl, setActiveCurl]           = useState(firstCurl);
   const [activeTab, setActiveTab]             = useState('headers');
   const [url, setUrl]                         = useState(firstCurl?.url    || '');
@@ -861,12 +1200,31 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   const [editingName, setEditingName]         = useState(false);
   const [collName, setCollName]               = useState(collection?.name || 'Untitled Collection');
   const nameInputRef                          = useRef(null);
-  const [favCurls, setFavCurls]               = useState(() => new Set());
+  const [favCurls, setFavCurls]               = useState(() => {
+    const initial = new Set();
+    (collection?.requests || []).forEach(r => {
+      if (r.favorite) initial.add(r.id);
+    });
+    return initial;
+  });
+  const [showCurlModal, setShowCurlModal]     = useState(false);
+  const [generatedCurl, setGeneratedCurl]     = useState('');
+  const [showReadOnlyToast, setShowReadOnlyToast] = useState(false);
 
+  useEffect(() => {
+    if (activeCurl && activeCurl.write_permission === false) {
+      setShowReadOnlyToast(true);
+      // Auto-hide after 10 seconds since it's a long message
+      const timer = setTimeout(() => setShowReadOnlyToast(false), 10000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowReadOnlyToast(false);
+    }
+  }, [activeCurl?.id, activeCurl?.write_permission]);
   const toggleFavCurl = useCallback(async (id) => {
     const isFav = favCurls.has(id);
     try {
-      await mockApiHit('PATCH', `/api/requests/${id}/favorite`, { favorite: !isFav });
+      await toggleRequestFavorite(id, !isFav);
       setFavCurls(prev => {
         const next = new Set(prev);
         next.has(id) ? next.delete(id) : next.add(id);
@@ -875,7 +1233,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
     } catch (err) {
       console.error(err);
     }
-  }, [favCurls, mockApiHit]);
+  }, [favCurls]);
 
   // ── KV state for the active request — seeded from the request's own data
   const initKV = useCallback((curl) => {
@@ -909,6 +1267,25 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   }, []);
 
   const [kvState, setKvState] = useState(() => initKV(firstCurl));
+  const canEdit = activeCurl ? activeCurl.write_permission !== false : true;
+
+  const activeCurlIdRef = useRef(activeCurl?.id);
+  useEffect(() => { activeCurlIdRef.current = activeCurl?.id; }, [activeCurl?.id]);
+
+  const loadDraft = useCallback((reqId) => {
+    try {
+      const draft = localStorage.getItem(`hitit_req_draft_${reqId}`);
+      return draft ? JSON.parse(draft) : null;
+    } catch { return null; }
+  }, []);
+
+  // ── Auto-save draft ──
+  useEffect(() => {
+    if (activeCurl?.id && activeCurl.id !== 'quicky-req') {
+      const draft = { url, method, kvState, requestNote };
+      try { localStorage.setItem(`hitit_req_draft_${activeCurl.id}`, JSON.stringify(draft)); } catch (e) {}
+    }
+  }, [url, method, kvState, requestNote, activeCurl?.id]);
 
   // Extract ghost configuration parameters directly out of shadowHistory instead of across all collection queries
   const sharedHeaders = useMemo(() => {
@@ -952,15 +1329,25 @@ export default function CollectionModal({ collection, user, onClose, globals = [
 
   const handleSelectCurl = async (curl) => {
     // Check if clicking same
-    if (activeCurl?.id === curl.id) return;
+                  if (activeCurl?.id === curl.id) return;
 
     // Track shadow history
     if (activeCurl) {
+      // Create a snapshot with unsaved edits to properly share between requests
+      const shadowCopy = {
+        ...activeCurl,
+        headers: kvState.headers.filter(h => h.k || h.v),
+        params: kvState.params.filter(p => p.k || p.v),
+        body: kvState.body,
+        auth: kvState.auth,
+        token: kvState.token
+      };
+
       setShadowHistory(prev => {
         // Exclude the one we are moving TO just in case it was a shadow
         const filtered = prev.filter(c => c.id !== curl.id && c.id !== activeCurl.id);
         // Prepend current active memory, keep max 2
-        return [activeCurl, ...filtered].slice(0, 2);
+        return [shadowCopy, ...filtered].slice(0, 2);
       });
     }
 
@@ -978,14 +1365,30 @@ export default function CollectionModal({ collection, user, onClose, globals = [
     if (cachedDetails[curl.id]) {
       const full = cachedDetails[curl.id];
       setActiveCurl(full);
-      setUrl(full.url || '');
-      setRequestNote(full.note || '');
-      setKvState(initKV(full));
+      const draft = loadDraft(curl.id);
+      if (draft) {
+        setUrl(draft.url);
+        setMethod(draft.method || full.method || 'GET');
+        setRequestNote(draft.requestNote || full.note || '');
+        setKvState(draft.kvState);
+      } else {
+        setUrl(full.url || '');
+        setRequestNote(full.note || '');
+        setKvState(initKV(full));
+      }
       return;
     }
 
     // Otherwise, fallback to initial dummy values while loading real ones
-    setKvState(initKV(curl));
+    const draft = loadDraft(curl.id);
+    if (draft) {
+      setUrl(draft.url);
+      setMethod(draft.method || curl.method || 'GET');
+      setRequestNote(draft.requestNote || curl.note || '');
+      setKvState(draft.kvState);
+    } else {
+      setKvState(initKV(curl));
+    }
 
     // And make the API call lazily
     try {
@@ -996,11 +1399,17 @@ export default function CollectionModal({ collection, user, onClose, globals = [
       setCachedDetails(prev => ({ ...prev, [curl.id]: fullDetails }));
       
       // Keep UI in sync if the user didn't click away already
-      setActiveCurl(prev => prev.id === curl.id ? fullDetails : prev);
-      if (activeCurl?.id === curl.id || !activeCurl) {
-        setUrl(fullDetails.url || '');
-        setRequestNote(fullDetails.note || '');
-        setKvState(initKV(fullDetails));
+      setActiveCurl(prev => prev?.id === curl.id ? fullDetails : prev);
+      
+      // Determine if we are still on the same request using ref
+      if (activeCurlIdRef.current === curl.id || !activeCurlIdRef.current) {
+        // If there's an existing draft, do NOT override with the backend data
+        const currentDraft = loadDraft(curl.id);
+        if (!currentDraft) {
+          setUrl(fullDetails.url || '');
+          setRequestNote(fullDetails.note || '');
+          setKvState(initKV(fullDetails));
+        }
       }
     } catch (err) {
       console.error("Failed to load full request details", err);
@@ -1014,7 +1423,37 @@ export default function CollectionModal({ collection, user, onClose, globals = [
     
     // Auto-save request details to backend before sending
     try {
-      if (activeCurl?.id) {
+      let currentActiveId = activeCurl?.id;
+
+      // Special handling for Quicky: persist it before hitting
+      if (collection.isQuicky && currentActiveId === 'quicky-req') {
+        // 1. Find or create a "Quick Requests" collection
+        let quickyCol = collections.find(c => c.name === 'Quick Requests' || c.isQuicky);
+        if (!quickyCol) {
+          // You might want to create it here or just use a default one
+          // For now, let's assume we use the first available collection as fallback or create one
+          // to keep it simple, let's try to create one if allowed by API
+        }
+        
+        const payload = {
+          collection_id: quickyCol?.id || collections[0]?.id,
+          name: activeCurl.name || 'Quick Request',
+          url,
+          method,
+          headers: kvState.headers.filter(h => h.k || h.v).map(h => ({ key: h.k, value: h.v })),
+          params: kvState.params.filter(p => p.k || p.v).map(p => ({ key: p.k, value: p.v })),
+          body: kvState.body,
+          auth: kvState.auth === 'No Auth' ? '' : kvState.token
+        };
+        
+        const newReq = await createCollectionRequest(payload);
+        currentActiveId = newReq.id;
+        setActiveCurl(newReq);
+        setCurls([newReq]); // Replace the dummy list with the real one
+        setCachedDetails(prev => ({ ...prev, [newReq.id]: newReq }));
+      }
+
+      if (currentActiveId && currentActiveId !== 'quicky-req') {
         let authString = kvState.auth === 'Bearer Token' ? `Bearer ${kvState.token}` : 
                          kvState.auth === 'Basic Auth' ? `Basic ${kvState.token}` :
                          kvState.token;
@@ -1024,7 +1463,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
         }
 
         const payload = {
-          name: activeCurl.name,
+          name: activeCurl?.name || 'Request',
           url,
           method,
           headers: kvState.headers.filter(h => h.k || h.v).map(h => ({ key: h.k, value: h.v })),
@@ -1032,24 +1471,28 @@ export default function CollectionModal({ collection, user, onClose, globals = [
           body: kvState.body,
           auth: authString
         };
-        const updatedReq = await updateCollectionRequest(activeCurl.id, payload);
+        const updatedReq = await updateCollectionRequest(currentActiveId, payload);
         
         // Update local state
         setActiveCurl(updatedReq);
-        setCurls(prev => prev.map(c => c.id === activeCurl.id ? { ...c, ...updatedReq } : c));
-        setCachedDetails(prev => ({ ...prev, [activeCurl.id]: updatedReq }));
+        setCurls(prev => prev.map(c => c.id === currentActiveId ? { ...c, ...updatedReq } : c));
+        setCachedDetails(prev => ({ ...prev, [currentActiveId]: updatedReq }));
+        
+        // Clear draft since it is formally sent and synced
+        try { localStorage.removeItem(`hitit_req_draft_${currentActiveId}`); } catch(e) {}
       }
     } catch (err) {
       console.error("Failed to sync request changes to backend before sending", err);
     }
 
     try {
-      if (!activeCurl?.id) {
-        setResponse("Error: Please save the request before hitting it.");
+      const targetId = activeCurl?.id;
+      if (!targetId || targetId === 'quicky-req') {
+        setResponse("Error: Could not persist request for execution.");
         setLoading(false);
         return;
       }
-      const resData = await hitRequest(activeCurl.id);
+      const resData = await hitRequest(targetId);
       
       setResponseMeta({
         status_code: resData.status_code,
@@ -1211,33 +1654,59 @@ export default function CollectionModal({ collection, user, onClose, globals = [
     <>
     <div className="cm-backdrop" onClick={onClose}>
       <div className="cm-modal" onClick={e=>e.stopPropagation()}>
+        {showReadOnlyToast && (
+          <div className="cm-readonly-toast">
+            <div className="cm-readonly-toast-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <div className="cm-readonly-toast-content">
+              <span className="cm-readonly-toast-title">Read-only Mode</span>
+              <p className="cm-readonly-toast-text">
+                Uneditable by the source user can not edit or write but can still see headers and body and stuff and execute api and stuff but ca not edit
+              </p>
+            </div>
+            <button className="cm-readonly-toast-close" onClick={() => setShowReadOnlyToast(false)}>×</button>
+          </div>
+        )}
 
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <div className="cm-modal-header">
           <div className="cm-modal-header-left">
-            <button className={`cm-panel-toggle${curlPanelOpen?' active':''}`} onClick={()=>setCurlPanelOpen(!curlPanelOpen)} title="Toggle request list">
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                <rect x="1.5" y="1.5" width="12" height="12" rx="2"/><path d="M5.5 1.5v12"/>
-              </svg>
-            </button>
+            {!collection.isQuicky && (
+              <button className={`cm-panel-toggle${curlPanelOpen?' active':''}`} onClick={()=>setCurlPanelOpen(!curlPanelOpen)} title="Toggle request list">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                  <rect x="1.5" y="1.5" width="12" height="12" rx="2"/><path d="M5.5 1.5v12"/>
+                </svg>
+              </button>
+            )}
             <div className="cm-modal-title-group">
-              {editingName ? (
-                <input
-                  ref={nameInputRef}
-                  className="cm-modal-collection-name-input"
-                  value={collName}
-                  onChange={e => setCollName(e.target.value)}
-                  onBlur={saveCollectionName}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') saveCollectionName(); }}
-                />
+              {collection.isQuicky ? (
+                <span className="cm-modal-collection-name">Quick Request</span>
               ) : (
-                <span
-                  className="cm-modal-collection-name cm-modal-collection-name--editable"
-                  onClick={() => { setEditingName(true); setTimeout(() => nameInputRef.current?.select(), 20); }}
-                  title="Click to rename"
-                >{collName}</span>
+                editingName ? (
+                  <input
+                    ref={nameInputRef}
+                    className="cm-modal-collection-name-input"
+                    value={collName}
+                    onChange={e => setCollName(e.target.value)}
+                    onBlur={saveCollectionName}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') saveCollectionName(); }}
+                  />
+                ) : (
+                  <span
+                    className="cm-modal-collection-name cm-modal-collection-name--editable"
+                    onClick={() => { setEditingName(true); setTimeout(() => nameInputRef.current?.select(), 20); }}
+                    title="Click to rename"
+                  >
+                    {collName}
+                  </span>
+                )
               )}
-              <div className="cm-modal-breadcrumb"><span>{activeCurl?.name}</span></div>
+              {!collection.isQuicky && (
+                <div className="cm-modal-breadcrumb"><span>{activeCurl?.name}</span></div>
+              )}
             </div>
           </div>
           <div className="cm-modal-header-right">
@@ -1265,12 +1734,11 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                 />
               )}
             </div>
-            <button className={`cm-icon-btn-label${commentsPanelOpen?' active':''}`} onClick={()=>setCommentsPanelOpen(!commentsPanelOpen)}>
+            <button className={`cm-icon-btn-label${activityPanelOpen?' active':''}`} onClick={()=>setActivityPanelOpen(!activityPanelOpen)}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
                 <path d="M12 1H2a1 1 0 00-1 1v7a1 1 0 001 1h2l3 3 3-3h2a1 1 0 001-1V2a1 1 0 00-1-1z"/>
               </svg>
-              Comments
-              <span className="cm-comment-count">{MOCK_COMMENTS.filter(c=>!c.resolved).length}</span>
+              Activity
             </button>
             <button className="cm-close-btn" onClick={onClose}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 1l12 12M13 1L1 13"/></svg>
@@ -1323,7 +1791,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
             {activeCurl && (<>
             <div className="cm-url-bar">
               <div className="cm-method-wrap">
-                <button className="cm-method-btn" onClick={()=>setMethodOpen(!methodOpen)}>
+                <button className="cm-method-btn" onClick={()=> !canEdit ? null : setMethodOpen(!methodOpen)} disabled={!canEdit}>
                   <MethodBadge method={method}/>
                   <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M1 3l3.5 3.5L8 3"/></svg>
                 </button>
@@ -1342,6 +1810,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                   className="cm-url-input" 
                   style={{ width: '100%', paddingRight: '2.5rem' }}
                   value={url} 
+                  disabled={!canEdit}
                   onChange={e => {
                     const val = e.target.value;
                     const parsed = parseCurlCommand(val);
@@ -1404,9 +1873,10 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                       sharedSuggestions={sharedHeaders}
                       onChange={val=>updateHeader(i,val)}
                       onDelete={()=>deleteHeader(i)}
+                      isReadOnly={!canEdit}
                     />
                   ))}
-                  <button className="cm-kv-add" onClick={addHeader}>+ Add header</button>
+                  <button className="cm-kv-add" onClick={addHeader} disabled={!canEdit}>+ Add header</button>
                   {sharedHeaders.length>0 && (
                     <div className="cm-shared-banner" style={{ background: 'rgba(59, 130, 246, 0.08)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
                       <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -1428,9 +1898,10 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                       sharedSuggestions={sharedParams}
                       onChange={val=>updateParam(i,val)}
                       onDelete={()=>deleteParam(i)}
+                      isReadOnly={!canEdit}
                     />
                   ))}
-                  <button className="cm-kv-add" onClick={addParam}>+ Add param</button>
+                  <button className="cm-kv-add" onClick={addParam} disabled={!canEdit}>+ Add param</button>
                   {sharedParams.length>0 && (
                     <div className="cm-shared-banner" style={{ background: 'rgba(59, 130, 246, 0.08)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
                       <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -1454,6 +1925,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                     value={kvState.body} 
                     onChange={e => setKvState(prev => ({ ...prev, body: e.target.value }))}
                     spellCheck={false}
+                    disabled={!canEdit}
                   />
                 </div>
               )}
@@ -1467,6 +1939,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                       className="cm-auth-select" 
                       value={kvState.auth}
                       onChange={e => setKvState(prev => ({ ...prev, auth: e.target.value }))}
+                      disabled={!canEdit}
                     >
                       <option>Bearer Token</option><option>Basic Auth</option><option>API Key</option><option>OAuth 2.0</option><option>No Auth</option>
                     </select>
@@ -1479,6 +1952,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
                         style={{width:'100%'}} 
                         value={kvState.token}
                         onChange={e => setKvState(prev => ({ ...prev, token: e.target.value }))}
+                        disabled={!canEdit}
                       />
                       {globals.length>0 && (
                         <div className="cm-auth-globals-hint">
@@ -1646,14 +2120,14 @@ export default function CollectionModal({ collection, user, onClose, globals = [
               <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M11 1H2a1 1 0 00-1 1v6a1 1 0 001 1h2l2.5 2.5L9 9h2a1 1 0 001-1V2a1 1 0 00-1-1z"/>
               </svg>
-              <input className="cm-coll-comment-input" placeholder="Add a note to this request…" value={requestNote} onChange={e=>setRequestNote(e.target.value)}/>
-              {requestNote !== (activeCurl?.note || '') && <button className="cm-coll-comment-save" onClick={saveRequestNote}>Save</button>}
+              <input className="cm-coll-comment-input" placeholder="Add a note to this request…" value={requestNote} onChange={e=>setRequestNote(e.target.value)} disabled={!canEdit}/>
+              {canEdit && requestNote !== (activeCurl?.note || '') && <button className="cm-coll-comment-save" onClick={saveRequestNote}>Save</button>}
             </div>
             </> )}
           </div>
 
-          {/* Comments panel */}
-          <CommentsPanel open={commentsPanelOpen} onClose={()=>setCommentsPanelOpen(false)} collectionId={collection?.id} />
+          {/* Activity Panel */}
+          <ActivityFeedPanel open={activityPanelOpen} onClose={()=>setActivityPanelOpen(false)} collectionId={collection?._id || collection?.id} currentUser={user} />
         </div>
 
         {/* Recent hover strip */}
@@ -1690,6 +2164,29 @@ export default function CollectionModal({ collection, user, onClose, globals = [
         onClose={() => setGlobalStoreOpen(false)}
       />
     )}
+
+    {showCurlModal && (
+      <CurlModal
+        curl={generatedCurl}
+        onClose={() => setShowCurlModal(false)}
+        onApply={(updatedCurl) => {
+          const parsed = parseCurlCommand(updatedCurl);
+          if (parsed.isCurl) {
+            setUrl(parsed.url);
+            setMethod(parsed.method);
+            setKvState(prev => ({
+              ...prev,
+              headers: parsed.headers,
+              auth: parsed.auth,
+              token: parsed.token,
+              body: parsed.body || ''
+            }));
+          }
+        }}
+        isReadOnly={!canEdit}
+      />
+    )}
     </>
+
   );
 }

@@ -59,6 +59,15 @@ export async function updateRequestNote(requestId, note) {
   return body.data;
 }
 
+export async function toggleRequestFavorite(requestId, favorite) {
+  const body = await apiClient(`/api/requests/${requestId}/modify/`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify({ favorite }),
+  });
+  return body.data;
+}
+
 /**
  * Execute a request
  * POST /api/requests/:id/hit

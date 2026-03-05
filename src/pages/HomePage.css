@@ -63,6 +63,25 @@
   font-weight: 600;
 }
 .hp-nav-item.active svg { stroke: var(--purple); }
+ 
+.hp-nav-item--quicky {
+  background: var(--purple);
+  color: #fff !important;
+  margin: 0.5rem 0 0.5rem -0.6rem;
+  padding: 0.7rem 0.75rem 0.7rem 1.35rem; /* Left padding = sidebar nav padding (0.6) + item padding (0.75) */
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  width: calc(100% + 0.6rem);
+  box-shadow: 0 4px 12px var(--purple-glow);
+}
+.hp-nav-item--quicky svg { stroke: #fff !important; }
+.hp-nav-item--quicky:hover {
+  background: var(--purple-mid);
+  transform: none; /* Full bleed looks better static or just color shifting */
+}
+.hp-nav-item--quicky.active {
+  background: var(--purple-mid) !important;
+  border: none;
+}
 
 .hp-sidebar-bottom {
   border-top: 1px solid var(--border);
