@@ -392,7 +392,7 @@ function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
         setPage(1);
         setHasMore(true);
         const data = await getActivities(collectionId, mode, 1, 20);
-        const activities = Array.isArray(data) ? data : (data?.activities || []);
+        const activities = Array.isArray(data) ? data : (data?.history || data?.activities || []);
         setItems(activities);
         if (activities.length < 20) setHasMore(false);
       } catch (err) {
@@ -413,7 +413,7 @@ function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
       
       const nextPage = page + 1;
       const data = await getActivities(collectionId, mode, nextPage, 20);
-      const activities = Array.isArray(data) ? data : (data?.activities || []);
+      const activities = Array.isArray(data) ? data : (data?.history || data?.activities || []);
       
       if (activities.length < 20) setHasMore(false);
       
@@ -438,7 +438,7 @@ function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
     if (!open || !collectionId) return;
 
     const token = tokenStore.get();
-    const wsUrl = `ws://localhost:8080/api/feed/ws/${collectionId}?token=${token}`;
+    const wsUrl = `ws://localhost:8080/api/v1/ws/${collectionId}?token=${token}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -730,7 +730,7 @@ function SharePanel({ collection, activeCurl, onClose }) {
   
   const idValue = useMemo(() => {
     const target = scope === 'collection' ? collection : activeCurl;
-    return (shareAsNew ? target?._id : target?.masterId) || target?.id;
+    return (shareAsNew ? target?._id : (target?.master_id || target?.masterId)) || target?.id;
   }, [scope, collection, activeCurl, shareAsNew]);
 
   useEffect(() => {
@@ -2181,7 +2181,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
           </div>
 
           {/* Activity Panel */}
-          <ActivityFeedPanel open={activityPanelOpen} onClose={()=>setActivityPanelOpen(false)} collectionId={collection?._id || collection?.id} currentUser={user} />
+          <ActivityFeedPanel open={activityPanelOpen} onClose={()=>setActivityPanelOpen(false)} collectionId={collection?.master_id || collection?.masterId || collection?._id || collection?.id} currentUser={user} />
         </div>
 
         {/* Recent hover strip */}
