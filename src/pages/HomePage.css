@@ -621,3 +621,110 @@
   color: #f59e0b;
   background: rgba(245,158,11,0.1);
 }
+
+/* ── Teams & Organization View ─────────────────────────────────────────────── */
+.hp-team-view {
+  animation: cardIn 0.3s ease both;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.hp-section-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 1.2rem;
+  letter-spacing: 0.02em;
+}
+
+.hp-org-card {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  transition: border-color 0.2s;
+}
+
+.hp-org-card:hover {
+  border-color: var(--border-2);
+}
+
+.hp-org-icon {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--purple-light), var(--purple));
+  color: #fff;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px var(--purple-glow);
+}
+
+.hp-org-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.hp-org-details h3 {
+  font-size: 1.2rem;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.hp-org-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+  color: var(--text-2);
+  flex-wrap: wrap;
+}
+
+.hp-badge {
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.hp-badge--role {
+  background: var(--purple-dim);
+  color: var(--purple);
+  border: 1px solid rgba(108,63,197,0.15);
+}
+
+.hp-meta-dot {
+  color: var(--border-2);
+}
+
+.hp-meta-muted {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.hp-teams-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+}
+
+.hp-teams-header .hp-section-title {
+  margin-bottom: 0;
+}
+
+.hp-teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.25rem;
+}

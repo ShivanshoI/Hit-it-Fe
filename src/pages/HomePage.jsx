@@ -512,7 +512,7 @@ export default function HomePage({ user, onLogout }) {
         <header className="hp-topbar">
           <div className="hp-topbar-left">
             <h1 className="hp-page-title">
-              {activeTab === 'history' ? 'Execution History' : 'Collections'}
+              {activeTab === 'history' ? 'Execution History' : activeTab === 'team' ? 'Teams & Organization' : 'Collections'}
             </h1>
           </div>
           {(activeTab === 'home' || activeTab === 'collections') && (
@@ -533,7 +533,70 @@ export default function HomePage({ user, onLogout }) {
           )}
         </header>
 
-        {activeTab === 'history' ? (
+        {activeTab === 'team' ? (
+          <div className="hp-team-view" style={{ padding: '1.5rem 2.4rem 3rem' }}>
+            {/* Organization Section */}
+            <div className="hp-org-section">
+              <h2 className="hp-section-title">Organization</h2>
+              <div className="hp-org-card">
+                <div className="hp-org-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M13 3l8 4v14M9 11v2M9 15v2M17 11v2M17 15v2"/></svg>
+                </div>
+                <div className="hp-org-details">
+                  <h3>Acme Corp</h3>
+                  <div className="hp-org-meta">
+                    <span className="hp-badge hp-badge--role">Member</span>
+                    <span className="hp-meta-dot">•</span>
+                    <span>120 Members</span>
+                    <span className="hp-meta-dot">•</span>
+                    <span className="hp-meta-muted">Assigned via Backend</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Teams Section */}
+            <div className="hp-teams-section">
+              <div className="hp-teams-header">
+                <h2 className="hp-section-title">Your Teams</h2>
+                <button className="hp-btn-new hp-btn-new-team">
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6.5 1v11M1 6.5h11"/></svg>
+                  Create Team
+                </button>
+              </div>
+              
+              <div className="hp-teams-grid">
+                {[
+                  { id: 't1', name: 'Frontend Guild', members: 12, accent_color: '#10b981', pattern: 'waves', role: 'Admin' },
+                  { id: 't2', name: 'Backend Services', members: 8, accent_color: '#7c3aed', pattern: 'grid', role: 'Member' },
+                  { id: 't3', name: 'Design System', members: 5, accent_color: '#f59e0b', pattern: 'dots', role: 'Member' }
+                ].map((team, i) => (
+                  <div key={team.id} className="hc-card" style={{ animationDelay: `${i * 0.05}s` }}>
+                    <div className="hc-card-thumb" style={{ borderBottom: `2px solid ${team.accent_color}22` }}>
+                      <Thumbnail color={team.accent_color} pattern={team.pattern} />
+                      <div className="hc-card-method" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', backdropFilter: 'blur(4px)' }}>
+                        {team.role}
+                      </div>
+                    </div>
+                    <div className="hc-card-body">
+                      <div className="hc-card-top">
+                        <h3 className="hc-card-name" style={{ fontSize: '1.05rem' }}>{team.name}</h3>
+                      </div>
+                      <div className="hc-card-meta" style={{ marginTop: '1.2rem' }}>
+                        <span className="hc-meta-item">
+                          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                            <circle cx="6" cy="6" r="2.5"/><path d="M1 13c0-2.5 2-4 5-4s5 1.5 5 4"/><circle cx="12" cy="5" r="2"/><path d="M14.5 12c0-1.8-1-3-2.5-3"/>
+                          </svg>
+                          {team.members} Members
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : activeTab === 'history' ? (
           <div className="hp-history-view" style={{ padding: '0 2.4rem 3rem' }}>
             {loading ? (
               <div style={{ textAlign: 'center', marginTop: '24px', color: '#6b7280' }}>Loading history...</div>
