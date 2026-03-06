@@ -3,31 +3,31 @@ import { signOut, getMe } from './api/auth.api';
 import LandingPage from './pages/LandingPage';
 import HomePage from './pages/HomePage';
 import AuthModal from './components/AuthModal';
-import DevPanel from './components/DevPanel';
-import { MockApiProvider } from './components/MockApiProvider';
+
+import { TeamProvider, useTeam } from './context/TeamContext';
 import './App.css';
+
+// ─── Inner component that has access to TeamContext ───────────────────────────
+// This must live inside <TeamProvider> so it can call clearTeam() on logout.
+function AuthedApp({ user, onLogout }) {
+  const { clearTeam } = useTeam();
+
+  const handleLogout = () => {
+    clearTeam();   // ← wipes hitit_active_team from localStorage first
+    onLogout();
+  };
+
+  return <HomePage user={user} onLogout={handleLogout} />;
+}
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [user, setUser] = useState(null);
-  const [forcedView, setForcedView] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
-
-  const [devConfig, setDevConfig] = useState({
-    loginResult: 'success',
-    registerResult: 'success',
-  });
-
-  // When dev panel jumps to a view, open the modal and force the view
-  const handleForceView = (view) => {
-    setForcedView(view);
-    setModalOpen(true);
-  };
 
   const handleModalClose = () => {
     setModalOpen(false);
-    setForcedView(null);
   };
 
   useEffect(() => {
@@ -55,7 +55,6 @@ export default function App() {
     setUser(userData);
     setIsLoggedIn(true);
     setModalOpen(false);
-    setForcedView(null);
   };
 
   if (isInitializing) {
@@ -67,31 +66,25 @@ export default function App() {
   }
 
   return (
-    <MockApiProvider>
-      <div className="app">
-        {isLoggedIn ? (
-          <HomePage user={user} onLogout={() => { signOut(); setUser(null); setIsLoggedIn(false); }} />
-        ) : (
-          <LandingPage onOpenAuth={() => setModalOpen(true)} />
-        )}
+    <TeamProvider>
+        <div className="app">
+          {isLoggedIn ? (
+            <AuthedApp
+              user={user}
+              onLogout={() => { signOut(); setUser(null); setIsLoggedIn(false); }}
+            />
+          ) : (
+            <LandingPage onOpenAuth={() => setModalOpen(true)} />
+          )}
 
-        {modalOpen && (
-          <AuthModal
-            onClose={handleModalClose}
-            onSuccess={handleLoginSuccess}
-            devConfig={devConfig}
-            forcedView={forcedView}
-          />
-        )}
+          {modalOpen && (
+            <AuthModal
+              onClose={handleModalClose}
+              onSuccess={handleLoginSuccess}
+            />
+          )}
+          </div>
 
-        {import.meta.env.DEV && (
-          <DevPanel
-            config={devConfig}
-            onChange={setDevConfig}
-            onForceView={handleForceView}
-          />
-        )}
-      </div>
-    </MockApiProvider>
+    </TeamProvider>
   );
 }

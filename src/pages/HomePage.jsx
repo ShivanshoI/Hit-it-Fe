@@ -2,7 +2,9 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import CollectionModal from '../components/CollectionModal';
 import NewCollectionModal from '../components/NewCollectionModal';
 import ImportModal from '../components/ImportModal';
-import { useMockApi } from '../components/MockApiProvider';
+import TeamPanel from '../components/TeamPanel';
+import TeamActivityFeed from '../components/TeamActivityFeed';
+import { useTeam, PALETTES } from '../context/TeamContext';
 import { getCollections, getCollection, createCollection, updateCollection, deleteCollection, toggleFavoriteCollection, getFavoriteCollections, getSharedCollections } from '../api/homePage.api';
 import { getHistory } from '../api/history.api';
 import './HomePage.css';
@@ -204,9 +206,11 @@ function NewCard({ style, onClick }) {
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
-function Sidebar({ user, onLogout, active, setActive, onQuicky }) {
+function Sidebar({ user, onLogout, active, setActive, onQuicky, activeTeam, onClearTeam }) {
+  const isTeamMode = !!activeTeam;
+
   const navItems = [
-    { id: 'home', label: 'Home', icon: (
+    { id: 'home', label: isTeamMode ? 'HOME' : 'Home', icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <path d="M2 6.5L8 2l6 4.5V14a1 1 0 01-1 1H3a1 1 0 01-1-1V6.5z"/>
       </svg>
@@ -246,8 +250,27 @@ function Sidebar({ user, onLogout, active, setActive, onQuicky }) {
 
   return (
     <aside className="hp-sidebar">
+      {/* Logo — shows team name when in team mode */}
       <div className="hp-sidebar-logo">
-        HIT<em>IT</em>
+        {isTeamMode ? (
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}
+            onClick={() => onClearTeam?.()}
+            title="Click to exit team mode"
+          >
+            <div style={{
+              width: 10, height: 10, borderRadius: '50%',
+              background: PALETTES[activeTeam.theme]?.accent || '#6c3fc5',
+              boxShadow: `0 0 6px ${PALETTES[activeTeam.theme]?.accent || '#6c3fc5'}`,
+            }} />
+            <span style={{ fontSize: '1.1rem', fontWeight: 700, letterSpacing: '0.02em' }}>{activeTeam.name}</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ opacity: 0.4, marginLeft: 'auto' }}>
+              <path d="M8 1H11v3M7 5l4-4M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V7"/>
+            </svg>
+          </div>
+        ) : (
+          <>HIT<em>IT</em></>
+        )}
       </div>
 
       <nav className="hp-sidebar-nav">
@@ -262,6 +285,7 @@ function Sidebar({ user, onLogout, active, setActive, onQuicky }) {
                 setActive(item.id);
               }
             }}
+            style={item.id === 'home' && isTeamMode ? { fontWeight: 800, letterSpacing: '0.06em' } : {}}
           >
             {item.icon}
             <span>{item.label}</span>
@@ -275,6 +299,15 @@ function Sidebar({ user, onLogout, active, setActive, onQuicky }) {
           <div className="hp-user-info">
             <span className="hp-user-name">{user?.name || 'User'}</span>
             <span className="hp-user-email">{user?.email || ''}</span>
+            {isTeamMode && (
+              <span style={{
+                fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.05em', color: PALETTES[activeTeam.theme]?.accent || '#6c3fc5',
+                marginTop: '0.15rem',
+              }}>
+                Team: {activeTeam.name}
+              </span>
+            )}
           </div>
         </div>
         <button className="hp-sidebar-logout" onClick={onLogout} title="Logout">
@@ -289,7 +322,8 @@ function Sidebar({ user, onLogout, active, setActive, onQuicky }) {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function HomePage({ user, onLogout }) {
-  const { mockApiHit } = useMockApi();
+  const { activeTeam, clearTeam, isTeamMode, teamId } = useTeam();
+
   const [collections, setCollections]         = useState([]);
   const [page, setPage]                       = useState(1);
   const [hasMore, setHasMore]                 = useState(true);
@@ -311,6 +345,21 @@ export default function HomePage({ user, onLogout }) {
   const [activeTab, setActiveTab]             = useState('home');
   const [historyItems, setHistoryItems]       = useState([]);
 
+  // Team Activity Feed toggle
+  const [showTeamFeed, setShowTeamFeed]       = useState(false);
+
+  // Reset data when switching between team/personal
+  useEffect(() => {
+    setCollections([]);
+    setHistoryItems([]);
+    setPage(1);
+    setHasMore(true);
+    setSelectedCollection(null);
+    if (activeTab === 'team' && !isTeamMode) {
+      setActiveTab('home');
+    }
+  }, [teamId]);
+
   useEffect(() => {
     if (activeTab === 'history') {
       fetchHistory(1, true);
@@ -323,7 +372,7 @@ export default function HomePage({ user, onLogout }) {
     if (!user?.id) return;
     try {
       setLoading(true);
-      const data = await getHistory(pageNumber, 20);
+      const data = await getHistory(pageNumber, 20, teamId);
       const history = Array.isArray(data) ? data : (data?.history || []);
       
       setHasMore(history.length === 50);
@@ -347,11 +396,11 @@ export default function HomePage({ user, onLogout }) {
       setLoading(true);
       let response;
       if (activeTab === 'favorites') {
-        response = await getFavoriteCollections(pageNumber, 14);
+        response = await getFavoriteCollections(pageNumber, 14, teamId);
       } else if (activeTab === 'shared') {
-        response = await getSharedCollections(pageNumber, 14);
+        response = await getSharedCollections(pageNumber, 14, teamId);
       } else {
-        response = await getCollections(pageNumber, 14);
+        response = await getCollections(pageNumber, 14, '', teamId);
       }
       
       let data = Array.isArray(response) ? response : (response?.collections || []);
@@ -389,7 +438,7 @@ export default function HomePage({ user, onLogout }) {
   const toggleFavCollection = async (id) => {
     const isFav = favCollections.has(id);
     try {
-      await toggleFavoriteCollection(id, { favorite: !isFav });
+      await toggleFavoriteCollection(id, { favorite: !isFav }, teamId);
       setFavCollections(prev => {
         const next = new Set(prev);
         next.has(id) ? next.delete(id) : next.add(id);
@@ -467,9 +516,9 @@ export default function HomePage({ user, onLogout }) {
 
       let savedCollection;
       if (isEdit) {
-        savedCollection = await updateCollection(payload.id, payload);
+        savedCollection = await updateCollection(payload.id, payload, teamId);
       } else {
-        savedCollection = await createCollection(payload);
+        savedCollection = await createCollection(payload, teamId);
       }
 
       if (isEdit) {
@@ -489,7 +538,7 @@ export default function HomePage({ user, onLogout }) {
 
   const handleDeleteCollection = async (id) => {
     try {
-      await deleteCollection(id);
+      await deleteCollection(id, teamId);
       setCollections(prev => prev.filter(c => c.id !== id));
       if (selectedCollection?.id === id) setSelectedCollection(null);
     } catch (err) {
@@ -504,7 +553,9 @@ export default function HomePage({ user, onLogout }) {
         onLogout={onLogout} 
         active={activeTab} 
         setActive={setActiveTab} 
-        onQuicky={handleQuicky} 
+        onQuicky={handleQuicky}
+        activeTeam={activeTeam}
+        onClearTeam={clearTeam}
       />
 
       <div className="hp-main">
@@ -512,25 +563,46 @@ export default function HomePage({ user, onLogout }) {
         <header className="hp-topbar">
           <div className="hp-topbar-left">
             <h1 className="hp-page-title">
-              {activeTab === 'history' ? 'Execution History' : activeTab === 'team' ? 'Teams & Organization' : 'Collections'}
+              {activeTab === 'history'
+                ? 'Execution History'
+                : activeTab === 'team'
+                  ? 'Teams & Organization'
+                  : isTeamMode
+                    ? `${activeTeam.name} — Collections`
+                    : 'Collections'}
             </h1>
           </div>
-          {(activeTab === 'home' || activeTab === 'collections') && (
-            <div className="hp-topbar-right" style={{ display: 'flex', gap: '8px' }}>
-              <button className="hp-btn-new" onClick={() => setImportOpen(true)} style={{ background: '#4b5563', borderColor: '#4b5563' }}>
+          <div className="hp-topbar-right" style={{ display: 'flex', gap: '8px' }}>
+            {/* Team Feed toggle (only in team mode) */}
+            {isTeamMode && activeTab !== 'team' && (
+              <button
+                className="hp-btn-new"
+                style={{ background: showTeamFeed ? 'var(--purple-mid)' : '#4b5563', borderColor: showTeamFeed ? 'var(--purple-mid)' : '#4b5563' }}
+                onClick={() => setShowTeamFeed(v => !v)}
+              >
                 <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M6.5 1v8M3.5 6l3 3 3-3M1 11h11"/>
+                  <path d="M1 1h4v5H1zM8 1h4v4H8zM8 7h4v5H8zM1 8h4v4H1z"/>
                 </svg>
-                Import
+                {showTeamFeed ? 'Hide Feed' : 'Team Feed'}
               </button>
-              <button className="hp-btn-new" onClick={openNewCollectionModal}>
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M6.5 1v11M1 6.5h11"/>
-                </svg>
-                New Collection
-              </button>
-            </div>
-          )}
+            )}
+            {(activeTab === 'home' || activeTab === 'collections' || activeTab === 'favorites' || activeTab === 'shared') && (
+              <>
+                <button className="hp-btn-new" onClick={() => setImportOpen(true)} style={{ background: '#4b5563', borderColor: '#4b5563' }}>
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M6.5 1v8M3.5 6l3 3 3-3M1 11h11"/>
+                  </svg>
+                  Import
+                </button>
+                <button className="hp-btn-new" onClick={openNewCollectionModal}>
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M6.5 1v11M1 6.5h11"/>
+                  </svg>
+                  New Collection
+                </button>
+              </>
+            )}
+          </div>
         </header>
 
         {activeTab === 'team' ? (
@@ -555,46 +627,8 @@ export default function HomePage({ user, onLogout }) {
               </div>
             </div>
 
-            {/* Teams Section */}
-            <div className="hp-teams-section">
-              <div className="hp-teams-header">
-                <h2 className="hp-section-title">Your Teams</h2>
-                <button className="hp-btn-new hp-btn-new-team">
-                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6.5 1v11M1 6.5h11"/></svg>
-                  Create Team
-                </button>
-              </div>
-              
-              <div className="hp-teams-grid">
-                {[
-                  { id: 't1', name: 'Frontend Guild', members: 12, accent_color: '#10b981', pattern: 'waves', role: 'Admin' },
-                  { id: 't2', name: 'Backend Services', members: 8, accent_color: '#7c3aed', pattern: 'grid', role: 'Member' },
-                  { id: 't3', name: 'Design System', members: 5, accent_color: '#f59e0b', pattern: 'dots', role: 'Member' }
-                ].map((team, i) => (
-                  <div key={team.id} className="hc-card" style={{ animationDelay: `${i * 0.05}s` }}>
-                    <div className="hc-card-thumb" style={{ borderBottom: `2px solid ${team.accent_color}22` }}>
-                      <Thumbnail color={team.accent_color} pattern={team.pattern} />
-                      <div className="hc-card-method" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', backdropFilter: 'blur(4px)' }}>
-                        {team.role}
-                      </div>
-                    </div>
-                    <div className="hc-card-body">
-                      <div className="hc-card-top">
-                        <h3 className="hc-card-name" style={{ fontSize: '1.05rem' }}>{team.name}</h3>
-                      </div>
-                      <div className="hc-card-meta" style={{ marginTop: '1.2rem' }}>
-                        <span className="hc-meta-item">
-                          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                            <circle cx="6" cy="6" r="2.5"/><path d="M1 13c0-2.5 2-4 5-4s5 1.5 5 4"/><circle cx="12" cy="5" r="2"/><path d="M14.5 12c0-1.8-1-3-2.5-3"/>
-                          </svg>
-                          {team.members} Members
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Teams Section — now uses TeamPanel component */}
+            <TeamPanel />
           </div>
         ) : activeTab === 'history' ? (
           <div className="hp-history-view" style={{ padding: '0 2.4rem 3rem' }}>
@@ -787,7 +821,7 @@ export default function HomePage({ user, onLogout }) {
         <CollectionModal
           user={user}
           collection={selectedCollection}
-          collections={collections}
+          recentCollections={collections}
           onSelectCollection={setSelectedCollection}
           onClose={() => setSelectedCollection(null)}
           onCustomize={() => openCustomizeModal(selectedCollection)}
@@ -812,6 +846,11 @@ export default function HomePage({ user, onLogout }) {
             fetchCollections(1, true);
           }}
         />
+      )}
+
+      {/* Team Activity Feed — right sidebar */}
+      {isTeamMode && showTeamFeed && (
+        <TeamActivityFeed onClose={() => setShowTeamFeed(false)} />
       )}
     </div>
   );

@@ -1,8 +1,8 @@
 import GlobalStore from './GlobalStore';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useMockApi } from './MockApiProvider';
-import { createCollectionRequest, updateCollectionRequest, getCollectionRequestsSummary, getRequestDetails, updateRequestNote, hitRequest, toggleRequestFavorite } from '../api/request.api';
 import { exportCollaborators, getCollaborators } from '../api/collaborators.api';
+import { createCollectionRequest, updateCollectionRequest, getCollectionRequestsSummary, getRequestDetails, updateRequestNote, hitRequest, toggleRequestFavorite } from '../api/request.api';
+import { useTeam } from '../context/TeamContext';
 import { getActivities, sendActivity, resolveIssueApi, queryAiAssistant } from '../api/activity_feed.api';
 import { tokenStore } from '../api';
 import './CollectionModal.css';
@@ -13,15 +13,6 @@ import './CollectionModal.css';
 // Kept here only as fallback shape reference
 const GLOBALS_SHAPE = { id: 0, key: '', value: '', desc: '' };
 
-const MOCK_RECENT = [
-  { id: 1, name: 'Auth Service',      method: 'POST', color: '#7c3aed' },
-  { id: 2, name: 'Payment Gateway',   method: 'POST', color: '#0ea5e9' },
-  { id: 3, name: 'User Profiles API', method: 'GET',  color: '#10b981' },
-  { id: 4, name: 'Webhook Listeners', method: 'WS',   color: '#f59e0b' },
-  { id: 5, name: 'Search Endpoints',  method: 'GET',  color: '#ec4899' },
-];
-const RECENT_SORT = ['Last Opened', 'Name A–Z', 'Most Used'];
-
 const METHOD_STYLE = {
   GET:    { bg: 'rgba(16,185,129,0.12)',  text: '#10b981' },
   POST:   { bg: 'rgba(124,58,237,0.12)', text: '#7c3aed' },
@@ -30,18 +21,6 @@ const METHOD_STYLE = {
   WS:     { bg: 'rgba(14,165,233,0.12)', text: '#0ea5e9' },
 };
 const STATUS_COLOR = { 2:'#10b981', 3:'#f59e0b', 4:'#ef4444', 5:'#ef4444' };
-const MOCK_RESPONSE = `{\n  "id": "usr_01HX4K9B2M",\n  "name": "Shivansh Yadav",\n  "email": "shivansh@hitit.dev",\n  "role": "admin",\n  "created_at": "2026-01-15T08:32:11Z",\n  "metadata": {\n    "plan": "pro",\n    "requests_this_month": 4821\n  }\n}`;
-const MOCK_ACTIVITY_FEED = [
-  { id: 2, type: "user_chat", author: "Shivansh", avatar: "S", time: "1h ago", text: "Why is this 401ing?", scope: "group" },
-  { id: 3, type: "issue", author: "Priya", avatar: "P", time: "50m ago", text: "Headers are empty, please fix before deployment.", resolved: false, scope: "group" },
-  { id: 4, type: "ai_assistant", author: "Hit-IT AI", avatar: "✨", time: "45m ago", text: "It seems the request requires a valid JWT token. You can obtain one by hitting the /auth/login endpoint first.", scope: "group" },
-  { id: 5, type: "user_chat", author: "Dev", avatar: "D", time: "10m ago", text: "Fixed it, thanks!", scope: "group" },
-  { id: 6, type: "user_chat", author: "You", avatar: "Y", time: "2d ago", text: "Note to self: refactor this endpoint soon.", scope: "personal" },
-];
-const MOCK_INVITEES = [
-  { id: 1, name: 'Priya Sharma', initial: 'P', email: 'priya@hitit.dev',  permission: 'read-only'  },
-  { id: 2, name: 'Dev Kumar',    initial: 'D', email: 'dev@hitit.dev',    permission: 'read-write' },
-];
 
 // ─── Utility: Parse curl Command ──────────────────────────────────────────────
 const parseCurlCommand = (curlStr) => {
@@ -212,8 +191,7 @@ function KVRow({ row, sharedSuggestions, onChange, onDelete, onPickShared, isRea
 }
 
 // ─── Curl Panel (left sidebar in modal) ──────────────────────────────────────
-// Globals are defined & edited in the dashboard sidebar — read-only reference here
-function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename, open, globals, favCurls, onToggleFav, fetchingSummaries }) {
+function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename, open, favCurls, onToggleFav, fetchingSummaries }) {
   const [globalsOpen, setGlobalsOpen] = useState(false);
   const [editingId, setEditingId]     = useState(null);
   const [draftName, setDraftName]     = useState('');
@@ -320,40 +298,6 @@ function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename
             {favRequests.length > 0 && <div className="cm-curl-group-label" style={{ fontSize: '11px', textTransform: 'uppercase', color: '#9ca3af', margin: '16px 12px 6px', fontWeight: 600, letterSpacing: '0.5px' }}>Other Requests</div>}
             {otherRequests.map((curl, i) => renderCurl(curl, favRequests.length + i))}
           </>
-        )}
-      </div>
-
-      {/* Globals reference — read-only, defined in dashboard sidebar */}
-      <div className="cm-globals-toggle-wrap">
-        <button
-          className={`cm-globals-toggle${globalsOpen?' active':''}`}
-          onClick={() => setGlobalsOpen(!globalsOpen)}
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-            <circle cx="6.5" cy="6.5" r="5.5"/><path d="M6.5 1a9 9 0 010 11M1 6.5h11"/>
-          </svg>
-          <span>Globals</span>
-          <span className="cm-globals-count">{globals.length}</span>
-          <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-            <path d={globalsOpen ? "M1 6l3.5-3.5L8 6" : "M1 3l3.5 3.5L8 3"}/>
-          </svg>
-        </button>
-
-        {globalsOpen && (
-          <div className="cm-globals-readview">
-            <p className="cm-globals-readview-note">
-              Defined in sidebar · close modal to edit
-            </p>
-            {globals.length === 0 && (
-              <div className="cm-globals-empty">No globals defined yet.</div>
-            )}
-            {globals.map(g => (
-              <div key={g.id} className="cm-globals-chip-row">
-                <span className="cm-global-key">{'{{'+g.key+'}}'}</span>
-                <span className="cm-global-val">{g.value}</span>
-              </div>
-            ))}
-          </div>
         )}
       </div>
 
@@ -714,7 +658,6 @@ function RecentTabs({ recentCollections = [], onSelectCollection }) {
 
 // ─── Share Panel ───────────────────────────────────────────────────────────────
 function SharePanel({ collection, activeCurl, onClose }) {
-  const { mockApiHit } = useMockApi();
   const [scope, setScope]               = useState('collection'); // 'collection' | 'request'
   const [permission, setPermission]     = useState('read-only');  // 'read-only'  | 'read-write'
   const [shareAsNew, setShareAsNew]     = useState(false);
@@ -780,7 +723,6 @@ function SharePanel({ collection, activeCurl, onClose }) {
 
   const removeInvitee = async (id) => {
     try {
-      await mockApiHit('DELETE', `/api/collaborators/${id}`);
       setInvitees(p => p.filter(i => i.id !== id));
     } catch (err) {
       console.error(err);
@@ -789,7 +731,6 @@ function SharePanel({ collection, activeCurl, onClose }) {
 
   const changeInviteePerm = async (id, perm) => {
     try {
-      await mockApiHit('PATCH', `/api/collaborators/${id}`, { permission: perm });
       setInvitees(p => p.map(i => i.id === id ? { ...i, permission: perm } : i));
     } catch (err) {
       console.error(err);
@@ -822,12 +763,11 @@ function SharePanel({ collection, activeCurl, onClose }) {
           }));
           setInvitees(mapped);
         } else {
-          // If no data returned, default to empty (or mock for now to keep it visible)
-          setInvitees(MOCK_INVITEES);
+          setInvitees([]);
         }
       } catch (err) {
         console.error("Failed to fetch collaborators:", err);
-        setInvitees(MOCK_INVITEES); // Fallback to mock for development visibility
+        setInvitees([]);
       } finally {
         // Smooth transitionout
         setTimeout(() => setLoadingCollabs(false), 500);
@@ -1152,8 +1092,8 @@ function CurlModal({ curl, onClose, onApply, isReadOnly }) {
 
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
-export default function CollectionModal({ collection, user, onClose, globals = [], setGlobals = () => {}, onCustomize, collections = [], onSelectCollection }) {
-  const { mockApiHit } = useMockApi();
+export default function CollectionModal({ collection, onClose, recentCollections, onSelectCollection, user, initialCurlId }) {
+  const { teamId } = useTeam();
   // Each collection owns its own requests — seed from collection.requests (future: from API)
   const [curls, setCurls] = useState(() => collection?.requests || []);
   const [cachedDetails, setCachedDetails] = useState({}); // Stores full details for previously clicked requests
@@ -1185,7 +1125,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
       }
       try {
         setFetchingSummaries(true);
-        const data = await getCollectionRequestsSummary(collection.id);
+        const data = await getCollectionRequestsSummary(collection.id, teamId);
         let fetchedRequests = [];
         if (Array.isArray(data)) {
           fetchedRequests = data;
@@ -1278,7 +1218,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   const toggleFavCurl = useCallback(async (id) => {
     const isFav = favCurls.has(id);
     try {
-      await toggleRequestFavorite(id, !isFav);
+      await toggleRequestFavorite(id, !isFav, teamId);
       setFavCurls(prev => {
         const next = new Set(prev);
         next.has(id) ? next.delete(id) : next.add(id);
@@ -1444,10 +1384,12 @@ export default function CollectionModal({ collection, user, onClose, globals = [
       setKvState(initKV(curl));
     }
 
+    if (curl.id === 'quicky-req') return;
+
     // And make the API call lazily
     try {
       setFetchingDetails(true);
-      const fullDetails = await getRequestDetails(curl.id);
+      const fullDetails = await getRequestDetails(curl.id, teamId);
       
       // Update Cache
       setCachedDetails(prev => ({ ...prev, [curl.id]: fullDetails }));
@@ -1500,7 +1442,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
           auth: kvState.auth === 'No Auth' ? '' : kvState.token
         };
         
-        const newReq = await createCollectionRequest(payload);
+        const newReq = await createCollectionRequest(payload, teamId);
         currentActiveId = newReq.id;
         setActiveCurl(newReq);
         setCurls([newReq]); // Replace the dummy list with the real one
@@ -1525,7 +1467,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
           body: kvState.body,
           auth: authString
         };
-        const updatedReq = await updateCollectionRequest(currentActiveId, payload);
+        const updatedReq = await updateCollectionRequest(currentActiveId, payload, teamId);
         
         // Update local state
         setActiveCurl(updatedReq);
@@ -1546,7 +1488,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
         setLoading(false);
         return;
       }
-      const resData = await hitRequest(targetId);
+      const resData = await hitRequest(targetId, teamId);
       
       setResponseMeta({
         status_code: resData.status_code,
@@ -1579,13 +1521,13 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   const handleSaveResponse = async () => {
     if (!response) return;
     try {
-      const newSave = await mockApiHit('POST', `/api/requests/${activeCurl.id}/saves`, {
+      const newSave = {
         id: Date.now(),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
         date: new Date().toLocaleDateString([], { month: 'short', day: 'numeric' }),
         response,
         reqName: activeCurl.name,
-      });
+      };
       setSavedResponses(prev => ({
         ...prev,
         [activeCurl.id]: [newSave, ...(prev[activeCurl.id] || [])].slice(0, 20),
@@ -1600,7 +1542,6 @@ export default function CollectionModal({ collection, user, onClose, globals = [
 
   const handleDeleteSave = async (saveId) => {
     try {
-      await mockApiHit('DELETE', `/api/requests/${activeCurl.id}/saves/${saveId}`);
       setSavedResponses(prev => ({
         ...prev,
         [activeCurl.id]: (prev[activeCurl.id] || []).filter(s => s.id !== saveId),
@@ -1647,7 +1588,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   // ── Add new blank request ──
   const handleRenameRequest = async (id, newName) => {
     try {
-      await updateCollectionRequest(id, { name: newName });
+      await updateCollectionRequest(id, { name: newName }, teamId);
       setCurls(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c));
       if (activeCurl?.id === id) setActiveCurl(prev => ({ ...prev, name: newName }));
     } catch (err) {
@@ -1662,7 +1603,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
         name: `Request ${curls.length + 1}`,
         method: '', url: '',
         headers: [], params: [], body: '', auth: 'No Auth',
-      });
+      }, teamId);
       setCurls(prev => [...prev, newReq]);
       setCurlPanelOpen(true);
       setActiveCurl(newReq);
@@ -1680,7 +1621,9 @@ export default function CollectionModal({ collection, user, onClose, globals = [
       setEditingName(false); return;
     }
     try {
-      await mockApiHit('PATCH', `/api/collections/${collection.id}`, { name: collName.trim() });
+      // Assuming there's an API call to update collection name
+      // For now, just log and update local state
+      console.log('Renamed collection to', collName.trim());
       setEditingName(false);
     } catch (err) {
       console.error(err);
@@ -1692,7 +1635,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
   const saveRequestNote = async () => {
     try {
       if (!activeCurl) return;
-      await updateRequestNote(activeCurl.id, requestNote);
+      await updateRequestNote(activeCurl.id, requestNote, teamId);
       setActiveCurl(prev => prev ? ({ ...prev, note: requestNote }) : prev);
       setCachedDetails(prev => ({
         ...prev,
@@ -1812,7 +1755,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
             onAdd={addNewRequest}
             onRename={handleRenameRequest}
             open={curlPanelOpen}
-            globals={globals}
+
             favCurls={favCurls}
             onToggleFav={toggleFavCurl}
             fetchingSummaries={fetchingSummaries}
@@ -2188,7 +2131,7 @@ export default function CollectionModal({ collection, user, onClose, globals = [
         <div className="cm-recent-trigger" onMouseEnter={handleRecentEnter} onMouseLeave={handleRecentLeave}>
           <div className={`cm-recent-peek${recentHover?' cm-recent-peek--open':''}`}>
             <RecentTabs 
-              recentCollections={collections} 
+              recentCollections={recentCollections} 
               onSelectCollection={(c) => { 
                 if (onSelectCollection) {
                    onSelectCollection(c);

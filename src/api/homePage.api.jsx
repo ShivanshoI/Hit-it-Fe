@@ -1,17 +1,16 @@
 import { apiClient } from '../api';
 
 /**
- * Fetch collections with optional filtering and pagination
+ * Fetch collections with optional filtering, pagination, and team scope
  * GET /api/collections?filter=...&page=...&limit=...
  */
-export async function getCollections(page = 1, limit = 10, filter = '') {
+export async function getCollections(page = 1, limit = 10, filter = '', teamId = null) {
   let url = `/api/collections?page=${page}&limit=${limit}`;
-  if (filter) {
-    url += `&filter=${filter}`;
-  }
+  if (filter) url += `&filter=${filter}`;
   const response = await apiClient(url, {
     method: 'GET',
     auth: true,
+    ...(teamId ? { teamId } : {}),
   });
   return response.data;
 }
@@ -20,23 +19,25 @@ export async function getCollections(page = 1, limit = 10, filter = '') {
  * Fetch a single collection by ID (with its full requests)
  * GET /api/collections/:id
  */
-export async function getCollection(id) {
+export async function getCollection(id, teamId = null) {
   const response = await apiClient(`/api/collections/${id}`, {
     method: 'GET',
     auth: true,
+    ...(teamId ? { teamId } : {}),
   });
   return response.data;
 }
 
 /**
- * Create a new collection
+ * Create a new collection (team-scoped when teamId provided)
  * POST /api/collections
  */
-export async function createCollection(payload) {
+export async function createCollection(payload, teamId = null) {
   const response = await apiClient('/api/collections', {
     method: 'POST',
     auth: true,
     body: JSON.stringify(payload),
+    ...(teamId ? { teamId } : {}),
   });
   return response.data;
 }
@@ -45,11 +46,12 @@ export async function createCollection(payload) {
  * Update an existing collection
  * PATCH /api/collections/:id/mod/
  */
-export async function updateCollection(id, payload) {
+export async function updateCollection(id, payload, teamId = null) {
   const response = await apiClient(`/api/collections/${id}/mod/`, {
     method: 'PATCH',
     auth: true,
     body: JSON.stringify(payload),
+    ...(teamId ? { teamId } : {}),
   });
   return response.data;
 }
@@ -58,23 +60,25 @@ export async function updateCollection(id, payload) {
  * Delete a collection
  * DELETE /api/collections/:id
  */
-export async function deleteCollection(id) {
+export async function deleteCollection(id, teamId = null) {
   const response = await apiClient(`/api/collections/${id}`, {
     method: 'DELETE',
     auth: true,
+    ...(teamId ? { teamId } : {}),
   });
   return response.data;
 }
 
 /**
  * Toggle favourite status of a collection
- * PATCH /api/collections/:id/favorite
+ * PATCH /api/collections/:id/mod/favorite
  */
-export async function toggleFavoriteCollection(id, payload) {
+export async function toggleFavoriteCollection(id, payload, teamId = null) {
   const response = await apiClient(`/api/collections/${id}/mod/favorite`, {
     method: 'PATCH',
     auth: true,
     body: JSON.stringify(payload),
+    ...(teamId ? { teamId } : {}),
   });
   return response.data;
 }
@@ -83,14 +87,14 @@ export async function toggleFavoriteCollection(id, payload) {
  * Fetch favorite collections
  * GET /api/collections?filter=fav
  */
-export async function getFavoriteCollections(page = 1, limit = 10) {
-  return getCollections(page, limit, 'fav');
+export async function getFavoriteCollections(page = 1, limit = 10, teamId = null) {
+  return getCollections(page, limit, 'fav', teamId);
 }
 
 /**
  * Fetch shared collections
  * GET /api/collections?filter=share
  */
-export async function getSharedCollections(page = 1, limit = 10) {
-  return getCollections(page, limit, 'share');
+export async function getSharedCollections(page = 1, limit = 10, teamId = null) {
+  return getCollections(page, limit, 'share', teamId);
 }

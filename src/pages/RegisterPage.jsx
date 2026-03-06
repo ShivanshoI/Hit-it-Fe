@@ -1,20 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { signUp } from '../api/auth.api';
 import './RegisterPage.css';
 
-// ─── Mock register ─────────────────────────────────────────────────────────────
-function mockRegister(data) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // Simulate: fail if email already exists
-      if (data.email === 'admin@hitit.com' || data.email === 'test@hitit.com') {
-        resolve({ success: false, message: 'This email is already registered.' });
-      } else {
-        resolve({ success: true });
-      }
-    }, 900);
-  });
-}
 
 // ─── Step indicator ────────────────────────────────────────────────────────────
 function Steps({ current }) {
@@ -77,13 +65,13 @@ export default function RegisterPage() {
     const e = validateStep1();
     if (Object.keys(e).length) { setErrors(e); return; }
     setErrors({});
-    setLoading(true);
-    const result = await mockRegister(form);
-    setLoading(false);
-    if (result.success) {
+    try {
+      await signUp(form);
+      setLoading(false);
       setStatus('success');
-    } else {
-      setStatus({ error: result.message });
+    } catch (err) {
+      setLoading(false);
+      setStatus({ error: err.message || 'Something went wrong' });
     }
   };
 
@@ -225,9 +213,6 @@ export default function RegisterPage() {
                 </button>
               </div>
 
-              <p className="reg-note">
-                ⚠️ Try <code>admin@hitit.com</code> to simulate a failure.
-              </p>
             </div>
           )}
         </div>

@@ -45,9 +45,8 @@ function Stepper({ step }) {
 }
 
 // ─── Main Modal ───────────────────────────────────────────────────────────────
-export default function AuthModal({ onClose, onSuccess, devConfig, forcedView }) {
-  // forcedView lets DevPanel jump straight to any state
-  const [view, setView] = useState(forcedView || 'login');
+export default function AuthModal({ onClose, onSuccess }) {
+  const [view, setView] = useState('login');
   const [loading, setLoading] = useState(false);
 
   const [loginForm, setLoginForm] = useState({ identifier: '', password: '' });
@@ -56,10 +55,6 @@ export default function AuthModal({ onClose, onSuccess, devConfig, forcedView })
   const [regForm, setRegForm] = useState({ firstName: '', lastName: '', email: '', phone: '', nickname: '' });
   const [regErr, setRegErr] = useState({});
 
-  // Sync if forcedView changes while modal is open
-  useEffect(() => {
-    if (forcedView) setView(forcedView);
-  }, [forcedView]);
 
   // Lock body scroll
   useEffect(() => {

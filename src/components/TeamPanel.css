@@ -1,0 +1,113 @@
+/* ── Team Panel ─────────────────────────────────────────────────────────────── */
+.tp-container {
+  padding: 0 2.4rem 3rem;
+  animation: tp-fadeIn 0.3s ease both;
+}
+@keyframes tp-fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Active team banner */
+.tp-active-banner {
+  display: flex; align-items: center; gap: 1rem;
+  background: var(--purple-dim);
+  border: 1.5px solid var(--purple-glow);
+  border-radius: var(--r-md); padding: 1rem 1.4rem;
+  margin-bottom: 1.8rem;
+  animation: tp-fadeIn 0.3s ease both;
+}
+.tp-active-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px currentColor;
+}
+.tp-active-info { flex: 1; min-width: 0; }
+.tp-active-info h4 {
+  font-size: 0.95rem; font-weight: 700; color: var(--text);
+  margin-bottom: 0.15rem;
+}
+.tp-active-info span {
+  font-size: 0.78rem; color: var(--text-2);
+}
+.tp-leave-btn {
+  background: var(--bg-2); border: 1.5px solid var(--border);
+  border-radius: var(--r-sm); padding: 0.45rem 0.9rem;
+  font-size: 0.78rem; font-weight: 600; color: var(--text-2);
+  transition: all 0.15s; white-space: nowrap;
+}
+.tp-leave-btn:hover {
+  background: var(--danger); color: #fff; border-color: var(--danger);
+}
+
+/* Team list */
+.tp-section { margin-bottom: 2rem; }
+.tp-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.tp-section-title {
+  font-size: 1.1rem; font-weight: 600; color: var(--text);
+  letter-spacing: 0.02em;
+}
+.tp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+/* Team card */
+.tp-card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 1.2rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex; flex-direction: column; gap: 0.8rem;
+  animation: tp-fadeIn 0.3s ease both;
+}
+.tp-card:hover {
+  border-color: var(--border-2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+.tp-card.tp-card--active {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 2px var(--purple-dim);
+}
+
+.tp-card-header { display: flex; align-items: center; gap: 0.75rem; }
+.tp-card-color {
+  width: 36px; height: 36px; border-radius: 10px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 800; font-size: 0.95rem;
+}
+.tp-card-name { font-size: 0.95rem; font-weight: 600; color: var(--text); }
+.tp-card-desc {
+  font-size: 0.8rem; color: var(--text-muted);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tp-card-footer {
+  display: flex; align-items: center; gap: 0.8rem;
+  margin-top: auto;
+}
+.tp-card-meta {
+  display: flex; align-items: center; gap: 0.3rem;
+  font-size: 0.75rem; color: var(--text-dim);
+}
+.tp-role-badge {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; padding: 0.15rem 0.5rem;
+  border-radius: 4px; margin-left: auto;
+}
+.tp-role-badge--admin { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.tp-role-badge--member { background: var(--bg-2); color: var(--text-muted); }
+
+/* Empty state */
+.tp-empty {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 0.8rem; padding: 3rem 1rem; color: var(--text-muted);
+  text-align: center;
+}
+.tp-empty-icon { font-size: 2.5rem; opacity: 0.3; }
+.tp-empty p { font-size: 0.88rem; }

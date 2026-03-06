@@ -23,13 +23,14 @@ export const tokenStore = {
  * @returns {Promise<any>}    — parsed JSON body
  * @throws  {ApiError}        — structured error with { message, status, data }
  */
-export async function apiClient(endpoint, { auth = false, headers = {}, ...rest } = {}) {
+export async function apiClient(endpoint, { auth = false, headers = {}, teamId, ...rest } = {}) {
   const url = `${BASE_URL}${endpoint}`;
 
   const finalHeaders = {
     'Content-Type': 'application/json',
     ...headers,
     ...(auth && tokenStore.get() ? { Authorization: `Bearer ${tokenStore.get()}` } : {}),
+    ...(teamId ? { 'X-Team-Id': teamId } : {}),
   };
 
   const response = await fetch(url, {

@@ -1,25 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { signIn } from '../api/auth.api';
 import './LoginPage.css';
 
-// ─── Mock credentials for local dev ───────────────────────────────────────────
-const MOCK_USERS = [
-  { email: 'admin@hitit.com', password: 'password123' },
-  { email: 'test@hitit.com', password: 'test123' },
-];
-
-function mockLogin(identifier, password) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const found = MOCK_USERS.find(
-        (u) =>
-          (u.email === identifier || u.email.split('@')[0] === identifier) &&
-          u.password === password
-      );
-      resolve(found ? { success: true } : { success: false, message: 'Invalid credentials' });
-    }, 800);
-  });
-}
 
 // ─── Modal ─────────────────────────────────────────────────────────────────────
 function Modal({ type, onClose, onRegister }) {
@@ -74,12 +57,12 @@ export default function LoginPage() {
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
     setErrors({});
-    setLoading(true);
-    const result = await mockLogin(form.identifier, form.password);
-    setLoading(false);
-    if (result.success) {
+    try {
+      await signIn({ emailAddress: form.identifier, password: form.password });
+      setLoading(false);
       setModal('success');
-    } else {
+    } catch (err) {
+      setLoading(false);
       setModal('failure');
     }
   };
@@ -150,9 +133,6 @@ export default function LoginPage() {
             Create Account
           </button>
 
-          <p className="login-hint">
-            💡 Try: <code>admin@hitit.com</code> / <code>password123</code>
-          </p>
         </div>
       </div>
 

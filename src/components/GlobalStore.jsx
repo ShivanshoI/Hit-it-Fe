@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useMockApi } from './MockApiProvider';
 import './GlobalStore.css';
 
 // ─── Initial Data ─────────────────────────────────────────────────────────────
@@ -312,7 +311,6 @@ function AddVarForm({ envs, categories, onAdd, onClose }) {
 
 // ─── Main Global Store Panel ───────────────────────────────────────────────────
 export default function GlobalStore({ collectionName, onClose }) {
-  const { mockApiHit } = useMockApi();
   const [vars, setVars]               = useState(INITIAL_VARS);
   const [envs]                        = useState(INITIAL_ENVS);
   const [categories, setCategories]   = useState(INITIAL_CATEGORIES);
@@ -382,19 +380,17 @@ export default function GlobalStore({ collectionName, onClose }) {
 
   const updateVar = async (id, updated) => {
     try {
-      await mockApiHit('PUT', `/api/globals/${id}`, updated);
       setVars(p => p.map(v => v.id===id ? updated : v));
     } catch (err) { console.error(err); }
   };
   const deleteVar = async (id) => {
     try {
-      await mockApiHit('DELETE', `/api/globals/${id}`);
       setVars(p => p.filter(v => v.id!==id));
     } catch (err) { console.error(err); }
   };
   const addVar = async (v) => {
     try {
-      const newVar = await mockApiHit('POST', '/api/globals', v);
+      const newVar = { ...v, id: Date.now() }; // Mock assigning an ID
       setVars(p => [...p, newVar]);
     } catch (err) { console.error(err); }
   };
@@ -406,9 +402,9 @@ export default function GlobalStore({ collectionName, onClose }) {
     try {
       const id = label.toLowerCase().replace(/\s+/g,'-');
       const colors = ['#6366f1','#ec4899','#14b8a6','#f97316','#84cc16'];
-      const newCat = await mockApiHit('POST', '/api/globals/categories', { 
+      const newCat = { 
         id, label, color: colors[categories.length % colors.length] 
-      });
+      };
       setCategories(c => [...c, newCat]);
       setNewCatDraft('');
     } catch (err) { console.error(err); }
@@ -512,7 +508,6 @@ export default function GlobalStore({ collectionName, onClose }) {
                     <span className="gs-cat-editor-label">{c.label}</span>
                     <button className="gs-cat-del" onClick={async () => {
                       try {
-                        await mockApiHit('DELETE', `/api/globals/categories/${c.id}`);
                         setCategories(cats=>cats.filter(x=>x.id!==c.id));
                       } catch (err) { console.error(err); }
                     }}>×</button>
