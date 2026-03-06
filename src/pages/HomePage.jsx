@@ -4,6 +4,8 @@ import NewCollectionModal from '../components/NewCollectionModal';
 import ImportModal from '../components/ImportModal';
 import TeamPanel from '../components/TeamPanel';
 import TeamActivityFeed from '../components/TeamActivityFeed';
+import ProfilePage from './ProfilePage';
+import PlanPage from './PlanPage';
 import { useTeam, PALETTES } from '../context/TeamContext';
 import { getCollections, getCollection, createCollection, updateCollection, deleteCollection, toggleFavoriteCollection, getFavoriteCollections, getSharedCollections } from '../api/homePage.api';
 import { getHistory } from '../api/history.api';
@@ -246,6 +248,12 @@ function Sidebar({ user, onLogout, active, setActive, onQuicky, activeTeam, onCl
         <circle cx="12" cy="5" r="2"/><path d="M14.5 12c0-1.8-1-3-2.5-3"/>
       </svg>
     )},
+    // //plan and billing
+    // { id: 'plan', label: 'Plan & Billing', icon: (
+    //   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    //     <rect x="2" y="5" width="20" height="14" rx="2" ry="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+    //   </svg>
+    // )},
   ];
 
   return (
@@ -294,7 +302,7 @@ function Sidebar({ user, onLogout, active, setActive, onQuicky, activeTeam, onCl
       </nav>
 
       <div className="hp-sidebar-bottom">
-        <div className="hp-sidebar-user">
+        <div className="hp-sidebar-user" onClick={() => setActive('profile')} style={{ cursor: 'pointer' }} title="View Profile">
           <div className="hp-avatar">{(user?.name || 'U')[0].toUpperCase()}</div>
           <div className="hp-user-info">
             <span className="hp-user-name">{user?.name || 'User'}</span>
@@ -348,6 +356,9 @@ export default function HomePage({ user, onLogout }) {
   // Team Activity Feed toggle
   const [showTeamFeed, setShowTeamFeed]       = useState(false);
 
+  // Pagination / Infinite Scroll
+  const loaderRef = useRef(null);
+
   // Reset data when switching between team/personal
   useEffect(() => {
     setCollections([]);
@@ -368,6 +379,32 @@ export default function HomePage({ user, onLogout }) {
     }
   }, [user?.id, activeTab]);
 
+  // Infinite Scroll Observer
+  useEffect(() => {
+    if (!hasMore || loading) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          if (activeTab === 'history') {
+            fetchHistory(page + 1);
+          } else {
+            fetchCollections(page + 1);
+          }
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loaderRef.current) {
+      observer.observe(loaderRef.current);
+    }
+
+    return () => {
+      if (loaderRef.current) observer.unobserve(loaderRef.current);
+    };
+  }, [hasMore, loading, page, activeTab]);
+
   const fetchHistory = async (pageNumber = 1, isReset = false) => {
     if (!user?.id) return;
     try {
@@ -375,7 +412,7 @@ export default function HomePage({ user, onLogout }) {
       const data = await getHistory(pageNumber, 20, teamId);
       const history = Array.isArray(data) ? data : (data?.history || []);
       
-      setHasMore(history.length === 50);
+      setHasMore(history.length === 20);
       
       if (isReset) {
         setHistoryItems(history);
@@ -563,7 +600,11 @@ export default function HomePage({ user, onLogout }) {
         <header className="hp-topbar">
           <div className="hp-topbar-left">
             <h1 className="hp-page-title">
-              {activeTab === 'history'
+              {activeTab === 'profile'
+                ? 'Your Profile'
+                : activeTab === 'plan'
+                ? 'Subscription Plan'
+                : activeTab === 'history'
                 ? 'Execution History'
                 : activeTab === 'team'
                   ? 'Teams & Organization'
@@ -605,7 +646,11 @@ export default function HomePage({ user, onLogout }) {
           </div>
         </header>
 
-        {activeTab === 'team' ? (
+        {activeTab === 'profile' ? (
+          <ProfilePage user={user} onLogout={onLogout} />
+        ) : activeTab === 'plan' ? (
+          <PlanPage user={user} />
+        ) : activeTab === 'team' ? (
           <div className="hp-team-view" style={{ padding: '1.5rem 2.4rem 3rem' }}>
             {/* Organization Section */}
             <div className="hp-org-section">
@@ -761,43 +806,43 @@ export default function HomePage({ user, onLogout }) {
           )}
         </div>
 
-        {/* Pagination Controls */}
-        {!loading && hasMore && (
-          <div className="hp-pagination" style={{ display: 'flex', justifyContent: 'center', marginTop: '24px', paddingBottom: '24px' }}>
-            {activeTab === 'history' ? (
-              <button 
-                className="hp-btn-load-more" 
-                style={{ padding: '8px 16px', borderRadius: '6px', background: 'var(--purple)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500 }}
-                onClick={() => fetchHistory(page + 1)}
-              >
-                Load More History
-              </button>
-            ) : (
-              collections.length < 20 ? (
-                <button 
-                  className="hp-btn-load-more" 
-                  style={{ padding: '8px 16px', borderRadius: '6px', background: '#3b82f6', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500 }}
-                  onClick={() => fetchCollections(page + 1)}
-                >
-                  Load More
-                </button>
-              ) : (
-                <button 
-                  className="hp-btn-next" 
-                  style={{ padding: '8px 16px', borderRadius: '6px', background: '#10b981', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500 }}
-                  onClick={() => fetchCollections(page + 1, true)}
-                >
-                  Next
-                </button>
-              )
-            )}
-          </div>
-        )}
-        {loading && (
-          <div style={{ textAlign: 'center', marginTop: '24px', paddingBottom: '24px', color: '#6b7280' }}>
-            Loading collections...
-          </div>
-        )}
+        {/* Infinite Scroll Trigger */}
+        <div 
+          ref={loaderRef} 
+          className="hp-sentinel" 
+          style={{ 
+            height: '100px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            marginTop: '10px',
+            paddingBottom: '40px' 
+          }}
+        >
+          {loading && (
+            <div className="hp-loader-spinner" style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              gap: '12px', 
+              color: 'var(--text-dim)', 
+              fontSize: '0.85rem' 
+            }}>
+              <svg className="hp-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: 'hp-spin 0.8s linear infinite', color: 'var(--purple)' }}>
+                <path d="M21 12a9 9 0 11-6.219-8.56" />
+              </svg>
+              <span style={{ fontWeight: 500, letterSpacing: '0.02em' }}>Fetching more insights...</span>
+            </div>
+          )}
+          {!hasMore && (filtered.length > 0 || historyItems.length > 0) && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '40px', height: '1px', background: 'var(--border)' }}></div>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                End of results
+              </span>
+            </div>
+          )}
+        </div>
 
             {filtered.length === 0 && (
               <div className="hp-empty">

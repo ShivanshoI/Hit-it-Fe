@@ -728,3 +728,8 @@
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 1.25rem;
 }
+
+@keyframes hp-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
