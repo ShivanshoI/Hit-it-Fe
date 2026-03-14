@@ -307,6 +307,7 @@ function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename
 
 // ─── Activity Feed Panel (Collection Mission Control) ─────────────────────────
 function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
+  const { teamId, orgId } = useTeam();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState('');
@@ -335,7 +336,7 @@ function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
       try {
         setPage(1);
         setHasMore(true);
-        const data = await getActivities(collectionId, mode, 1, 20);
+        const data = await getActivities(collectionId, mode, 1, 20, teamId, orgId);
         const activities = Array.isArray(data) ? data : (data?.history || data?.activities || []);
         setItems(activities);
         if (activities.length < 20) setHasMore(false);
@@ -356,7 +357,7 @@ function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
       if (listRef.current) lastScrollHeight.current = listRef.current.scrollHeight;
       
       const nextPage = page + 1;
-      const data = await getActivities(collectionId, mode, nextPage, 20);
+      const data = await getActivities(collectionId, mode, nextPage, 20, teamId, orgId);
       const activities = Array.isArray(data) ? data : (data?.history || data?.activities || []);
       
       if (activities.length < 20) setHasMore(false);
@@ -446,7 +447,7 @@ function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
           scope: mode,
           master_id: collectionId, // Use master_id to match backend expectations
           context: { url: window.location.href }
-        });
+        }, teamId, orgId);
         // Replace optimistic with real user message + ai response 
         setItems(p => p.map(item => item.id === optimisticId ? user_message : item).concat(ai_response));
       } else {
@@ -456,7 +457,7 @@ function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
           text: text, // Send both for compatibility
           scope: mode
         };
-        const newActivity = await sendActivity(collectionId, payload);
+        const newActivity = await sendActivity(collectionId, payload, teamId, orgId);
         
         // Merge real backend data but PROTECT the content if backend returns ""
         setItems(p => p.map(item => {
@@ -488,7 +489,7 @@ function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
 
   const resolveIssue = async (id) => {
     try {
-      const updated = await resolveIssueApi(id, collectionId);
+      const updated = await resolveIssueApi(id, collectionId, teamId, orgId);
       setItems(p => p.map(x => x.id === id ? { ...x, is_resolved: true } : x));
     } catch (err) {
       console.error("Failed to resolve issue:", err);
@@ -1093,7 +1094,7 @@ function CurlModal({ curl, onClose, onApply, isReadOnly }) {
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
 export default function CollectionModal({ collection, onClose, recentCollections, onSelectCollection, user, initialCurlId }) {
-  const { teamId } = useTeam();
+  const { teamId, orgId } = useTeam();
   // Each collection owns its own requests — seed from collection.requests (future: from API)
   const [curls, setCurls] = useState(() => collection?.requests || []);
   const [cachedDetails, setCachedDetails] = useState({}); // Stores full details for previously clicked requests
@@ -1125,7 +1126,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
       }
       try {
         setFetchingSummaries(true);
-        const data = await getCollectionRequestsSummary(collection.id, teamId);
+        const data = await getCollectionRequestsSummary(collection.id, teamId, orgId);
         let fetchedRequests = [];
         if (Array.isArray(data)) {
           fetchedRequests = data;
@@ -1218,7 +1219,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
   const toggleFavCurl = useCallback(async (id) => {
     const isFav = favCurls.has(id);
     try {
-      await toggleRequestFavorite(id, !isFav, teamId);
+      await toggleRequestFavorite(id, !isFav, teamId, orgId);
       setFavCurls(prev => {
         const next = new Set(prev);
         next.has(id) ? next.delete(id) : next.add(id);
@@ -1389,7 +1390,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
     // And make the API call lazily
     try {
       setFetchingDetails(true);
-      const fullDetails = await getRequestDetails(curl.id, teamId);
+      const fullDetails = await getRequestDetails(curl.id, teamId, orgId);
       
       // Update Cache
       setCachedDetails(prev => ({ ...prev, [curl.id]: fullDetails }));
@@ -1442,7 +1443,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
           auth: kvState.auth === 'No Auth' ? '' : kvState.token
         };
         
-        const newReq = await createCollectionRequest(payload, teamId);
+        const newReq = await createCollectionRequest(payload, teamId, orgId);
         currentActiveId = newReq.id;
         setActiveCurl(newReq);
         setCurls([newReq]); // Replace the dummy list with the real one
@@ -1467,7 +1468,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
           body: kvState.body,
           auth: authString
         };
-        const updatedReq = await updateCollectionRequest(currentActiveId, payload, teamId);
+        const updatedReq = await updateCollectionRequest(currentActiveId, payload, teamId, orgId);
         
         // Update local state
         setActiveCurl(updatedReq);
@@ -1488,7 +1489,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
         setLoading(false);
         return;
       }
-      const resData = await hitRequest(targetId, teamId);
+      const resData = await hitRequest(targetId, teamId, orgId);
       
       setResponseMeta({
         status_code: resData.status_code,
@@ -1588,7 +1589,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
   // ── Add new blank request ──
   const handleRenameRequest = async (id, newName) => {
     try {
-      await updateCollectionRequest(id, { name: newName }, teamId);
+      await updateCollectionRequest(id, { name: newName }, teamId, orgId);
       setCurls(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c));
       if (activeCurl?.id === id) setActiveCurl(prev => ({ ...prev, name: newName }));
     } catch (err) {
@@ -1603,7 +1604,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
         name: `Request ${curls.length + 1}`,
         method: '', url: '',
         headers: [], params: [], body: '', auth: 'No Auth',
-      }, teamId);
+      }, teamId, orgId);
       setCurls(prev => [...prev, newReq]);
       setCurlPanelOpen(true);
       setActiveCurl(newReq);
@@ -1635,7 +1636,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
   const saveRequestNote = async () => {
     try {
       if (!activeCurl) return;
-      await updateRequestNote(activeCurl.id, requestNote, teamId);
+      await updateRequestNote(activeCurl.id, requestNote, teamId, orgId);
       setActiveCurl(prev => prev ? ({ ...prev, note: requestNote }) : prev);
       setCachedDetails(prev => ({
         ...prev,

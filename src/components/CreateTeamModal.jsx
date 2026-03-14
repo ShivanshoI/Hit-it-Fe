@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { PALETTES } from '../context/TeamContext';
+import { useTeam, PALETTES } from '../context/TeamContext';
 import { createTeam, inviteByEmail } from '../api/teams.api';
 import './CreateTeamModal.css';
 
@@ -10,6 +10,7 @@ const THEME_OPTIONS = Object.entries(PALETTES).map(([key, val]) => ({
 }));
 
 export default function CreateTeamModal({ onClose, onCreated }) {
+  const { isOrgMode, orgId } = useTeam();
 
   const [name, setName] = useState('');
   const [theme, setTheme] = useState('purple');
@@ -52,7 +53,7 @@ export default function CreateTeamModal({ onClose, onCreated }) {
         name: name.trim(),
         theme,
         description: description.trim(),
-      });
+      }, isOrgMode ? orgId : null);
 
       // If emails provided, send invites
       if (emails.length > 0) {

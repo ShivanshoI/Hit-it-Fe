@@ -32,7 +32,15 @@ export function TeamProvider({ children }) {
     } catch { return null; }
   });
 
+  const [activeOrg, setActiveOrgState] = useState(() => {
+    try {
+      const stored = localStorage.getItem('hitit_active_org');
+      return stored ? JSON.parse(stored) : null;
+    } catch { return null; }
+  });
+
   const isTeamMode = !!activeTeam;
+  const isOrgMode = !!activeOrg;
 
   // Apply theme CSS variables
   useEffect(() => {
@@ -48,7 +56,7 @@ export function TeamProvider({ children }) {
     root.style.setProperty('--border-2', `${palette.accent}40`); // ~25% opacity
   }, [activeTeam]);
 
-  // Persist to localStorage
+  // Persist team to localStorage
   useEffect(() => {
     if (activeTeam) {
       localStorage.setItem('hitit_active_team', JSON.stringify(activeTeam));
@@ -56,6 +64,15 @@ export function TeamProvider({ children }) {
       localStorage.removeItem('hitit_active_team');
     }
   }, [activeTeam]);
+
+  // Persist org to localStorage
+  useEffect(() => {
+    if (activeOrg) {
+      localStorage.setItem('hitit_active_org', JSON.stringify(activeOrg));
+    } else {
+      localStorage.removeItem('hitit_active_org');
+    }
+  }, [activeOrg]);
 
   const setActiveTeam = useCallback((team) => {
     setActiveTeamState(team);
@@ -65,6 +82,14 @@ export function TeamProvider({ children }) {
     setActiveTeamState(null);
   }, []);
 
+  const setActiveOrg = useCallback((org) => {
+    setActiveOrgState(org);
+  }, []);
+
+  const clearOrg = useCallback(() => {
+    setActiveOrgState(null);
+  }, []);
+
   const value = {
     activeTeam,
     setActiveTeam,
@@ -72,6 +97,12 @@ export function TeamProvider({ children }) {
     isTeamMode,
     teamId: activeTeam?.id || null,
     teamTheme: activeTeam ? (PALETTES[activeTeam.theme] || DEFAULT_PALETTE) : null,
+    
+    activeOrg,
+    setActiveOrg,
+    clearOrg,
+    isOrgMode,
+    orgId: activeOrg?.id || null,
   };
 
   return (

@@ -1,9 +1,21 @@
 import { apiClient } from '../api';
 
+// ─── Scope Header Builder (mirrors homePage.api.js) ───────────────────────────
+function scopeHeaders(teamId = null, orgId = null) {
+  const headers = {};
+  if (orgId)  headers['x-org-id']  = orgId;
+  if (teamId) headers['x-team-id'] = teamId;
+  return headers;
+}
+
 // ─── Teams CRUD ───────────────────────────────────────────────────────────────
 
-export async function getMyTeams() {
-  const body = await apiClient('/api/teams', { method: 'GET', auth: true });
+export async function getMyTeams(orgId = null) {
+  const body = await apiClient('/api/teams', { 
+    method: 'GET', 
+    auth: true,
+    headers: scopeHeaders(null, orgId),
+  });
   return body.data;
 }
 
@@ -12,10 +24,11 @@ export async function getTeam(id) {
   return body.data;
 }
 
-export async function createTeam(payload) {
+export async function createTeam(payload, orgId = null) {
   const body = await apiClient('/api/teams', {
     method: 'POST', auth: true,
     body: JSON.stringify(payload),
+    headers: scopeHeaders(null, orgId),
   });
   return body.data;
 }

@@ -134,14 +134,15 @@ export async function getMe() {
  */
 function normaliseUser(raw) {
   return {
-    id:          raw.id,
-    firstName:   raw.first_name,
-    lastName:    raw.last_name,
-    nickName:    raw.nick_name,
-    name:        [raw.first_name, raw.last_name].filter(Boolean).join(' '),
-    email:       raw.email_address,
-    phoneNumber: raw.phone_number,
-    createdAt:   raw.created_at,
-    updatedAt:   raw.updated_at,
+    id:             raw.id,
+    firstName:      raw.first_name,
+    lastName:       raw.last_name,
+    nickName:       raw.nick_name,
+    name:           [raw.first_name, raw.last_name].filter(Boolean).join(' '),
+    email:          raw.email_address,
+    phoneNumber:    raw.phone_number,
+    organizationId: raw.organizationId, // Preserving the ID for verification
+    createdAt:      raw.created_at,
+    updatedAt:      raw.updated_at,
   };
 }

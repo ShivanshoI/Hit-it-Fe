@@ -23,14 +23,27 @@ export const tokenStore = {
  * @returns {Promise<any>}    — parsed JSON body
  * @throws  {ApiError}        — structured error with { message, status, data }
  */
-export async function apiClient(endpoint, { auth = false, headers = {}, teamId, ...rest } = {}) {
+export async function apiClient(endpoint, { auth = false, headers = {}, teamId, orgId: explicitOrgId, ...rest } = {}) {
   const url = `${BASE_URL}${endpoint}`;
+
+  let orgId = explicitOrgId;
+  if (!orgId) {
+    const storedOrg = localStorage.getItem('hitit_active_org');
+    if (storedOrg) {
+      try {
+        orgId = JSON.parse(storedOrg)?.id;
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
 
   const finalHeaders = {
     'Content-Type': 'application/json',
     ...headers,
     ...(auth && tokenStore.get() ? { Authorization: `Bearer ${tokenStore.get()}` } : {}),
     ...(teamId ? { 'X-Team-Id': teamId } : {}),
+    ...(orgId ? { 'X-Org-Id': orgId } : {}),
   };
 
   const response = await fetch(url, {

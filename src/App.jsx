@@ -10,10 +10,11 @@ import './App.css';
 // ─── Inner component that has access to TeamContext ───────────────────────────
 // This must live inside <TeamProvider> so it can call clearTeam() on logout.
 function AuthedApp({ user, onLogout }) {
-  const { clearTeam } = useTeam();
+  const { clearTeam, clearOrg } = useTeam();
 
   const handleLogout = () => {
-    clearTeam();   // ← wipes hitit_active_team from localStorage first
+    clearTeam();   // wipes team from localStorage
+    clearOrg();    // wipes org from localStorage
     onLogout();
   };
 
