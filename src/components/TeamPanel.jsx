@@ -3,6 +3,8 @@ import { useTeam, PALETTES } from '../context/TeamContext';
 import { getMyTeams } from '../api/teams.api';
 import { getOrganizationDetails, verifyOrganization } from '../api/orgs.api';
 import CreateTeamModal from './CreateTeamModal';
+import JoinTeamModal from './JoinTeamModal';
+import TeamMembersModal from './TeamMembersModal';
 import './TeamPanel.css';
 
 export default function TeamPanel({ user }) {
@@ -10,6 +12,14 @@ export default function TeamPanel({ user }) {
   const [teams, setTeams] = useState([]);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showJoin, setShowJoin] = useState(false);
+  const [managingTeam, setManagingTeam] = useState(null);
+
+  const handleJoined = (team) => {
+    setTeams(prev => [team, ...prev]);
+    setActiveTeam(team);
+    fetchTeamsAndOrg(); // Full refresh to get members and feed
+  };
 
   // Org State
   const [orgData, setOrgData] = useState(null);
@@ -279,13 +289,31 @@ export default function TeamPanel({ user }) {
       <div className="tp-section">
         <div className="tp-section-header">
           <h2 className="tp-section-title">Your Teams</h2>
-          <button className="hp-btn-new hp-btn-new-team" onClick={() => setShowCreate(true)}>
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M6.5 1v11M1 6.5h11"/>
-            </svg>
-            Create Team
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button className="hp-btn-new hp-btn-join-team" onClick={() => setShowJoin(true)} style={{ background: 'var(--bg-2)', color: 'var(--text-2)', border: '1px solid var(--border)' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="8.5" cy="7" r="4"/>
+                <line x1="20" y1="8" x2="20" y2="14"/>
+                <line x1="23" y1="11" x2="17" y2="11"/>
+              </svg>
+              Join Team
+            </button>
+            <button className="hp-btn-new hp-btn-new-team" onClick={() => setShowCreate(true)}>
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M6.5 1v11M1 6.5h11"/>
+              </svg>
+              Create Team
+            </button>
+          </div>
         </div>
+
+        {showJoin && (
+          <JoinTeamModal 
+            onClose={() => setShowJoin(false)}
+            onJoined={handleJoined}
+          />
+        )}
 
         {loadingTeams ? (
           <div className="tp-empty">
@@ -316,8 +344,13 @@ export default function TeamPanel({ user }) {
                     <div className="tp-card-color" style={{ background: palette.accent }}>
                       {team.name[0]}
                     </div>
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <div className="tp-card-name">{team.name}</div>
+                      {team.parent_team_id && (
+                        <div className="tp-card-parent">
+                          Sub-team of: {teams.find(t => t.id === team.parent_team_id)?.name || 'Parent Team'}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -337,6 +370,16 @@ export default function TeamPanel({ user }) {
                       {team.role}
                     </span>
                   </div>
+
+                  <button
+                    className="tp-manage-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setManagingTeam(team);
+                    }}
+                  >
+                    {team.role === 'owner' ? 'Manage Members' : 'View Members'}
+                  </button>
                 </div>
               );
             })}
@@ -349,6 +392,15 @@ export default function TeamPanel({ user }) {
         <CreateTeamModal
           onClose={() => setShowCreate(false)}
           onCreated={handleTeamCreated}
+        />
+      )}
+
+      {/* Manage Members Modal */}
+      {managingTeam && (
+        <TeamMembersModal
+          team={managingTeam}
+          currentUser={user}
+          onClose={() => setManagingTeam(null)}
         />
       )}
     </div>

@@ -82,6 +82,16 @@
   color: #fff; font-weight: 800; font-size: 0.95rem;
 }
 .tp-card-name { font-size: 0.95rem; font-weight: 600; color: var(--text); }
+.tp-card-parent {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  opacity: 0.8;
+  margin-top: 0.1rem;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .tp-card-desc {
   font-size: 0.8rem; color: var(--text-muted);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -102,6 +112,26 @@
 }
 .tp-role-badge--admin { background: rgba(245,158,11,0.12); color: #f59e0b; }
 .tp-role-badge--member { background: var(--bg-2); color: var(--text-muted); }
+
+.tp-manage-btn {
+  margin-top: 0.5rem;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.4rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.tp-manage-btn:hover {
+  background: var(--purple-dim);
+  border-color: var(--purple);
+  color: var(--purple);
+}
 
 /* Empty state */
 .tp-empty {

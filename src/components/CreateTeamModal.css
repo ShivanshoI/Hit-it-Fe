@@ -184,4 +184,19 @@
   font-size: 0.75rem; font-weight: 700;
   transition: all 0.15s; white-space: nowrap;
 }
-.ctm-copy-btn:hover { background: var(--purple-mid); }
+.ctm-copy-btn:hover { background: var(--purple-dim); }
+
+.ctm-invite-warning {
+  margin-top: 1rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 8px;
+  color: #f59e0b;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: left;
+}
+.ctm-warning-icon { font-size: 1rem; }

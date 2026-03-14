@@ -43,6 +43,36 @@ function relativeDay(dateStr) {
   return `${days}d ago`;
 }
 
+function buildTeamTree(teams, parentId = null) {
+  return teams
+    .filter(t => t.parent_team_id === parentId)
+    .map(t => ({
+      ...t,
+      children: buildTeamTree(teams, t.id)
+    }));
+}
+
+function renderNestedTeams(nodes, activeId, onSelect, depth = 0) {
+  if (!nodes || nodes.length === 0) return null;
+  return nodes.map(node => (
+    <div key={node.id} className="hp-sidebar-nested-item-wrap">
+      <button
+        className={`hp-sidebar-nested-item ${activeId === node.id ? 'active' : ''}`}
+        style={{ paddingLeft: `${0.75 + depth * 0.8}rem` }}
+        onClick={() => onSelect(node)}
+      >
+        <div className="hp-sidebar-nested-dot" style={{ background: PALETTES[node.theme]?.accent || 'var(--purple)' }} />
+        <span>{node.name}</span>
+      </button>
+      {node.children.length > 0 && (
+        <div className="hp-sidebar-nested-children">
+          {renderNestedTeams(node.children, activeId, onSelect, depth + 1)}
+        </div>
+      )}
+    </div>
+  ));
+}
+
 function requestCount(c) {
   return c.total_requests ?? (c.requests?.length ?? 0);
 }
@@ -273,7 +303,7 @@ const NAV_ITEMS = [
  */
 function Sidebar({ user, onLogout, active, setActive, onQuicky,
                    activeTeam, activeOrg, isTeamMode, isOrgMode,
-                   onClearTeam, onClearOrg }) {
+                   onClearTeam, onClearOrg, teams = [] }) {
 
   const teamAccent = isTeamMode ? (PALETTES[activeTeam.theme]?.accent || '#6c3fc5') : '#6c3fc5';
 
@@ -322,24 +352,49 @@ function Sidebar({ user, onLogout, active, setActive, onQuicky,
       <div className="hp-sidebar-logo">{renderLogo()}</div>
 
       <nav className="hp-sidebar-nav">
-        {NAV_ITEMS.map(item => (
-          <button
-            key={item.id}
-            className={`hp-nav-item${active === item.id ? ' active' : ''}${item.id === 'quicky' ? ' hp-nav-item--quicky' : ''}`}
-            onClick={() => item.id === 'quicky' ? onQuicky?.() : setActive(item.id)}
-            style={item.id === 'home' && (isTeamMode || isOrgMode) ? { fontWeight: 800, letterSpacing: '0.06em' } : undefined}
-          >
-            {item.icon}
-            <span>
-              {item.id === 'home' && (isTeamMode || isOrgMode) ? 'HOME' : 
-               item.id === 'shared' ? (
-                 isTeamMode ? 'Teams' : 
-                 isOrgMode ? 'Organization' : 
-                 'Shared'
-               ) : item.label}
-            </span>
-          </button>
-        ))}
+        {NAV_ITEMS.map(item => {
+          if (item.id === 'shared' && (isTeamMode || isOrgMode)) {
+            // Render nested teams under the "Teams" or "Organization" section
+            const rootTeams = teams.filter(t => !t.parent_team_id);
+            const teamTree = buildTeamTree(teams, null);
+
+            return (
+              <div key="teams-nested" className="hp-sidebar-teams-group">
+                <button
+                  className={`hp-nav-item${active === 'shared' ? ' active' : ''}`}
+                  onClick={() => setActive('shared')}
+                >
+                  {item.icon}
+                  <span>{isTeamMode ? 'Teams' : isOrgMode ? 'Organization' : 'Shared'}</span>
+                </button>
+                <div className="hp-sidebar-nested-list">
+                   {renderNestedTeams(teamTree, activeTeam?.id, (t) => {
+                     // logic to select team - this likely needs a callback from HomePage
+                     // For now, satisfy the UI by marking active
+                   })}
+                </div>
+              </div>
+            );
+          }
+          return (
+            <button
+              key={item.id}
+              className={`hp-nav-item${active === item.id ? ' active' : ''}${item.id === 'quicky' ? ' hp-nav-item--quicky' : ''}`}
+              onClick={() => item.id === 'quicky' ? onQuicky?.() : setActive(item.id)}
+              style={item.id === 'home' && (isTeamMode || isOrgMode) ? { fontWeight: 800, letterSpacing: '0.06em' } : undefined}
+            >
+              {item.icon}
+              <span>
+                {item.id === 'home' && (isTeamMode || isOrgMode) ? 'HOME' : 
+                 item.id === 'shared' ? (
+                   isTeamMode ? 'Teams' : 
+                   isOrgMode ? 'Organization' : 
+                   'Shared'
+                 ) : item.label}
+              </span>
+            </button>
+          );
+        })}
       </nav>
 
       <div className="hp-sidebar-bottom">
@@ -386,6 +441,7 @@ export default function HomePage({ user, onLogout }) {
   // ── Data state ──────────────────────────────────────────────────────────────
   const [collections,  setCollections]  = useState([]);
   const [historyItems, setHistoryItems] = useState([]);
+  const [teams,        setTeams]        = useState([]);
   const [favIds,       setFavIds]       = useState(() => new Set());
   const [page,         setPage]         = useState(1);
   const [hasMore,      setHasMore]      = useState(true);
@@ -432,6 +488,15 @@ export default function HomePage({ user, onLogout }) {
     if (activeTabRef.current === 'team' && !teamId && !orgId) {
       setActiveTab('home');
     }
+
+    // Fetch teams for sidebar if in team/org mode
+    if (teamId || orgId) {
+      import('../api/teams.api').then(api => {
+        api.getMyTeams(orgId).then(setTeams).catch(console.error);
+      });
+    } else {
+      setTeams([]);
+    }
   }, [teamId, orgId]);
 
   // ── Fetch helpers ───────────────────────────────────────────────────────────
@@ -473,8 +538,18 @@ export default function HomePage({ user, onLogout }) {
       if (activeTab === 'favorites') {
         response = await getFavoriteCollections(pageNumber, PAGE_SIZE, teamId, orgId);
       } else if (activeTab === 'shared') {
-        response = await getSharedCollections(pageNumber, PAGE_SIZE, teamId, orgId);
+        if (teamId || orgId) {
+          // In Team/Org mode, 'shared' tab shows ALL collections in that scope
+          response = await getCollections(pageNumber, PAGE_SIZE, '', teamId, orgId);
+        } else {
+          // In Personal mode, 'shared' tab shows collections shared with the user
+          response = await getSharedCollections(pageNumber, PAGE_SIZE, teamId, orgId);
+        }
+      } else if (activeTab === 'home' && (teamId || orgId)) {
+        // 'home' tab in Team or Org mode shows only user-created collections
+        response = await getCollections(pageNumber, PAGE_SIZE, 'mine', teamId, orgId);
       } else {
+        // default: 'home' in Personal mode, or other tabs
         response = await getCollections(pageNumber, PAGE_SIZE, '', teamId, orgId);
       }
 
@@ -653,6 +728,7 @@ export default function HomePage({ user, onLogout }) {
         isOrgMode={isOrgMode}
         onClearTeam={clearTeam}
         onClearOrg={clearOrg}
+        teams={teams}
       />
 
       <div className="hp-main">

@@ -60,6 +60,22 @@ export async function removeMember(teamId, userId) {
   return body.data;
 }
 
+export async function bulkRemoveMembers(teamId, userIds) {
+  const body = await apiClient(`/api/teams/${teamId}/members/bulk-remove`, {
+    method: 'POST', auth: true,
+    body: JSON.stringify({ user_ids: userIds }),
+  });
+  return body.data;
+}
+
+export async function transferOwnership(teamId, newOwnerId) {
+  const body = await apiClient(`/api/teams/${teamId}/transfer-ownership`, {
+    method: 'POST', auth: true,
+    body: JSON.stringify({ new_owner_id: newOwnerId }),
+  });
+  return body.data;
+}
+
 export async function updateMemberRole(teamId, userId, role) {
   const body = await apiClient(`/api/teams/${teamId}/members/${userId}`, {
     method: 'PATCH', auth: true,

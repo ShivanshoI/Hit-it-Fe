@@ -44,26 +44,37 @@ export default function CreateTeamModal({ onClose, onCreated }) {
     }
   };
 
+  const [inviteError, setInviteError] = useState(null);
+
   const handleSubmit = async () => {
     if (!name.trim() || name.trim().length < 3) return;
     setLoading(true);
+    setInviteError(null);
 
+    let newTeam = null;
     try {
-      const newTeam = await createTeam({
+      newTeam = await createTeam({
         name: name.trim(),
         theme,
         description: description.trim(),
       }, isOrgMode ? orgId : null);
 
+      setCreatedTeam(newTeam);
+      
       // If emails provided, send invites
       if (emails.length > 0) {
-        await inviteByEmail(newTeam.id, emails);
+        try {
+          await inviteByEmail(newTeam.id, emails);
+        } catch (invErr) {
+          console.error('Invites failed partially:', invErr);
+          setInviteError(invErr.message || 'Some invites could not be sent. Make sure users have signed up.');
+        }
       }
 
-      setCreatedTeam(newTeam);
       setStep('success');
     } catch (err) {
       console.error('Failed to create team:', err);
+      alert(err.message || 'Failed to create team. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -212,10 +223,16 @@ export default function CreateTeamModal({ onClose, onCreated }) {
                   {copied ? '✓ Copied' : 'Copy'}
                 </button>
               </div>
-              {emails.length > 0 && (
+              {emails.length > 0 && !inviteError && (
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                   📧 Invites sent to {emails.length} email{emails.length > 1 ? 's' : ''}
                 </p>
+              )}
+              {inviteError && (
+                <div className="ctm-invite-warning">
+                  <span className="ctm-warning-icon">⚠️</span>
+                  {inviteError}
+                </div>
               )}
             </div>
             <div className="ctm-actions">
