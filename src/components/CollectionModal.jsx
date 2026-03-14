@@ -24,27 +24,48 @@ const STATUS_COLOR = { 2:'#10b981', 3:'#f59e0b', 4:'#ef4444', 5:'#ef4444' };
 
 // ─── Utility: Parse curl Command ──────────────────────────────────────────────
 const parseCurlCommand = (curlStr) => {
-  const result = { method: 'GET', url: '', headers: [], auth: 'No Auth', token: '', body: '', isCurl: true };
-  if (!curlStr.trim().startsWith('curl ')) return { isCurl: false };
+  const result = { method: 'GET', url: '', headers: [], auth: 'No Auth', token: '', body: '', isCurl: false };
+  const trimmed = curlStr.trim();
+  
+  // More robust check for curl: starts with curl or contains it at the beginning of a line
+  if (!trimmed.toLowerCase().startsWith('curl') && !trimmed.includes('\ncurl')) return result;
 
-  // Strip any trailing backslash newline indicators from the pasted command
-  const cleanedStr = curlStr.replace(/\\\n/g, ' ');
+  // Strip any trailing backslash newline indicators and handle multi-line
+  const cleanedStr = trimmed.replace(/\\\n/g, ' ').replace(/\n/g, ' ');
 
-  const regex = /(?:[^\s"']+|"[^"]*"|'[^']*')+/g;
+  // Matches arguments while respecting quotes (single and double)
+  const regex = /"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|\S+/g;
   let args = [];
   let match;
   while ((match = regex.exec(cleanedStr)) !== null) {
-      if (match[0] !== '\\') args.push(match[0]);
+      args.push(match[0]);
   }
+
+  if (args.length === 0 || args[0].toLowerCase() !== 'curl') return result;
+  
+  // Set isCurl to true once we are sure it's a curl command
+  result.isCurl = true;
 
   let i = 1;
   while (i < args.length) {
-    const arg = args[i].replace(/^['"]|['"]$/g, '');
+    let arg = args[i];
+    arg = arg.replace(/^['"]|['"]$/g, '');
     
-    if (!arg.startsWith('-') && arg !== '\\' && !result.url && arg.startsWith('http')) {
-      result.url = arg;
-      i++;
-      continue;
+    // Improved URL detection:
+    // 1. Not a flag
+    // 2. Not consumed by a previous flag
+    // 3. Either starts with http/https, or contains a dot/colon that looks like a domain/localhost
+    if (!arg.startsWith('-') && !result.url) {
+      const isUrl = arg.startsWith('http') || 
+                    arg.startsWith('localhost') || 
+                    /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(arg) ||
+                    /^[a-zA-Z0-9.-]+:[0-9]+/.test(arg);
+      
+      if (isUrl) {
+        result.url = arg;
+        i++;
+        continue;
+      }
     }
 
     if (arg === '-X' || arg === '--request') {
@@ -76,15 +97,29 @@ const parseCurlCommand = (curlStr) => {
         }
         i++;
       }
-    } else if (arg === '-d' || arg === '--data' || arg === '--data-raw' || arg === '--data-binary') {
+    } else if (arg === '-d' || arg === '--data' || arg === '--data-raw' || arg === '--data-binary' || arg === '--data-ascii') {
       if (i + 1 < args.length) {
         result.body = args[i+1].replace(/^['"]|['"]$/g, '');
         if (result.method === 'GET') result.method = 'POST';
         i++;
       }
+    } else if (arg === '-u' || arg === '--user') {
+        if (i + 1 < args.length) {
+            result.auth = 'Basic Auth';
+            result.token = btoa(args[i+1].replace(/^['"]|['"]$/g, ''));
+            i++;
+        }
     }
     i++;
   }
+
+  // UX Fix: If it's just "curl" or "curl -" and we haven't found a URL yet,
+  // we might be typing. In that case, don't trigger the auto-fill yet
+  // to avoid clearing the URL input while the user is mid-command.
+  if (result.isCurl && !result.url && trimmed.length < 10) {
+      result.isCurl = false;
+  }
+
   return result;
 };
 
@@ -1191,6 +1226,8 @@ export default function CollectionModal({ collection, onClose, recentCollections
   const shareRef                              = useRef(null);
   const [requestNote, setRequestNote]         = useState('');
   const [globalStoreOpen, setGlobalStoreOpen] = useState(false);
+  const globals = []; // Fallback as this seems to satisfy line 1990 without crashing
+
   const recentTimer                           = useRef(null);
   const [editingName, setEditingName]         = useState(false);
   const [collName, setCollName]               = useState(collection?.name || 'Untitled Collection');
@@ -1425,7 +1462,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
       // Special handling for Quicky: persist it before hitting
       if (collection.isQuicky && currentActiveId === 'quicky-req') {
         // 1. Find or create a "Quick Requests" collection
-        let quickyCol = collections.find(c => c.name === 'Quick Requests' || c.isQuicky);
+        let quickyCol = recentCollections.find(c => c.name === 'Quick Requests' || c.isQuicky);
         if (!quickyCol) {
           // You might want to create it here or just use a default one
           // For now, let's assume we use the first available collection as fallback or create one
@@ -1433,14 +1470,16 @@ export default function CollectionModal({ collection, onClose, recentCollections
         }
         
         const payload = {
-          collection_id: quickyCol?.id || collections[0]?.id,
+          collection_id: quickyCol?.id || recentCollections[0]?.id,
           name: activeCurl.name || 'Quick Request',
           url,
           method,
           headers: kvState.headers.filter(h => h.k || h.v).map(h => ({ key: h.k, value: h.v })),
           params: kvState.params.filter(p => p.k || p.v).map(p => ({ key: p.k, value: p.v })),
           body: kvState.body,
-          auth: kvState.auth === 'No Auth' ? '' : kvState.token
+          auth: kvState.auth === 'Bearer Token' ? `Bearer ${kvState.token}` : 
+                kvState.auth === 'Basic Auth' ? `Basic ${kvState.token}` : 
+                kvState.auth === 'No Auth' ? '' : kvState.token
         };
         
         const newReq = await createCollectionRequest(payload, teamId, orgId);
