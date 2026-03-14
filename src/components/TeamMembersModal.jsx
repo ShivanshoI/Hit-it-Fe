@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getTeamMembers, removeMember, bulkRemoveMembers, transferOwnership, inviteByEmail, getInviteLink } from '../api/teams.api';
+import { useScrollLock } from '../hooks/useScrollLock';
+import { useNotification } from '../context/NotificationContext';
 import './TeamMembersModal.css';
 
 export default function TeamMembersModal({ team, onClose, currentUser }) {
+  const { showToast, showConfirm, showAlert } = useNotification();
+  useScrollLock();
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState(null);
@@ -46,44 +50,49 @@ export default function TeamMembersModal({ team, onClose, currentUser }) {
 
   const handleBulkRemove = async () => {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Are you sure you want to remove ${selectedIds.size} members?`)) return;
+    const confirmed = await showConfirm(`Are you sure you want to remove ${selectedIds.size} members?`, 'Bulk Remove');
+    if (!confirmed) return;
     
     try {
       setLoading(true);
       await bulkRemoveMembers(team.id, Array.from(selectedIds));
       setMembers(prev => prev.filter(m => !selectedIds.has(m.id)));
       setSelectedIds(new Set());
+      showToast('Members removed successfully.', 'success');
     } catch (err) {
-      alert(err.message || 'Failed to remove members.');
+      showToast(err.message || 'Failed to remove members.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const handleTransferOwnership = async (newOwnerId, newOwnerName) => {
-    if (!window.confirm(`Are you sure you want to transfer ownership to ${newOwnerName}? You will lose owner permissions.`)) return;
+    const confirmed = await showConfirm(`Are you sure you want to transfer ownership to ${newOwnerName}? You will lose owner permissions.`, 'Transfer Ownership');
+    if (!confirmed) return;
     
     try {
       setTransferring(true);
       await transferOwnership(team.id, newOwnerId);
-      alert('Ownership transferred successfully.');
+      await showAlert('Ownership transferred successfully.', 'Success');
       onClose(); // Close modal as user role changed
       window.location.reload(); // Refresh to update roles everywhere
     } catch (err) {
-      alert(err.message || 'Failed to transfer ownership.');
+      showToast(err.message || 'Failed to transfer ownership.', 'error');
     } finally {
       setTransferring(false);
     }
   };
 
   const handleRemove = async (userId) => {
-    if (!window.confirm('Are you sure you want to remove this member?')) return;
+    const confirmed = await showConfirm('Are you sure you want to remove this member?', 'Remove Member');
+    if (!confirmed) return;
     try {
       setRemovingId(userId);
       await removeMember(team.id, userId);
       setMembers(prev => prev.filter(m => m.id !== userId));
+      showToast('Member removed.', 'success');
     } catch (err) {
-      alert(err.message || 'Failed to remove member.');
+      showToast(err.message || 'Failed to remove member.', 'error');
     } finally {
       setRemovingId(null);
     }
@@ -96,10 +105,11 @@ export default function TeamMembersModal({ team, onClose, currentUser }) {
       if (res && res.link) {
         await navigator.clipboard.writeText(res.link);
         setCopied(true);
+        showToast('Invite link copied!', 'success');
         setTimeout(() => setCopied(false), 2000);
       }
     } catch (err) {
-      alert(err.message || 'Failed to get invite link.');
+      showToast(err.message || 'Failed to get invite link.', 'error');
     } finally {
       setFetchingLink(false);
     }
@@ -114,9 +124,9 @@ export default function TeamMembersModal({ team, onClose, currentUser }) {
       setInviting(true);
       await inviteByEmail(team.id, [email]);
       setEmailInput('');
-      alert('Invite sent!');
+      showToast('Invite sent!', 'success');
     } catch (err) {
-      alert(err.message || 'Failed to send invite.');
+      showToast(err.message || 'Failed to send invite.', 'error');
     } finally {
       setInviting(false);
     }

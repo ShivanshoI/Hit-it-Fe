@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { acceptInvite } from '../api/teams.api';
+import { useScrollLock } from '../hooks/useScrollLock';
 import './JoinTeamModal.css';
 
 export default function JoinTeamModal({ onClose, onJoined }) {
+  useScrollLock();
   const [tokenInput, setTokenInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

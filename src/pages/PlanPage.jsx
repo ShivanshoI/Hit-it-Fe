@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './PlanPage.css';
 import ManageBillingPage from './ManageBillingPage';
 import { getPlans, getSubscription, upgradePlan, cancelSubscription } from '../api/plan.api.js';
+import { useNotification } from '../context/NotificationContext';
 
 // ─── Icon helpers ─────────────────────────────────────────────────────────────
 const PLAN_ICONS = {
@@ -36,6 +37,7 @@ function formatRenewalDate(isoStr) {
 }
 
 export default function PlanPage({ user }) {
+  const { showConfirm } = useNotification();
   const [isLoaded, setIsLoaded]             = useState(false);
   const [billingCycle, setBillingCycle]     = useState('yearly');
   const [showManageBilling, setShowManageBilling] = useState(false);
@@ -98,7 +100,8 @@ export default function PlanPage({ user }) {
   };
 
   const handleCancel = async () => {
-    if (!window.confirm("Are you sure you want to cancel your subscription? You'll keep access until the end of your billing cycle.")) return;
+    const confirmed = await showConfirm("Are you sure you want to cancel your subscription? You'll keep access until the end of your billing cycle.", 'Cancel Subscription');
+    if (!confirmed) return;
     setCancelling(true);
     setActionMessage({ text: '', type: '' });
     try {

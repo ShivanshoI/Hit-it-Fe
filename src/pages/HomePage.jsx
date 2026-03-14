@@ -13,8 +13,6 @@ import {
   updateCollection,
   deleteCollection,
   toggleFavoriteCollection,
-  getFavoriteCollections,
-  getSharedCollections,
 } from '../api/homePage.api';
 import { getHistory } from '../api/history.api';
 import './HomePage.css';
@@ -303,7 +301,7 @@ const NAV_ITEMS = [
  */
 function Sidebar({ user, onLogout, active, setActive, onQuicky,
                    activeTeam, activeOrg, isTeamMode, isOrgMode,
-                   onClearTeam, onClearOrg, teams = [] }) {
+                   onClearTeam, onClearOrg, onSelectTeam, teams = [] }) {
 
   const teamAccent = isTeamMode ? (PALETTES[activeTeam.theme]?.accent || '#6c3fc5') : '#6c3fc5';
 
@@ -354,9 +352,8 @@ function Sidebar({ user, onLogout, active, setActive, onQuicky,
       <nav className="hp-sidebar-nav">
         {NAV_ITEMS.map(item => {
           if (item.id === 'shared' && (isTeamMode || isOrgMode)) {
-            // Render nested teams under the "Teams" or "Organization" section
-            const rootTeams = teams.filter(t => !t.parent_team_id);
             const teamTree = buildTeamTree(teams, null);
+            const label = isTeamMode ? 'Teams' : 'Organization';
 
             return (
               <div key="teams-nested" className="hp-sidebar-teams-group">
@@ -365,14 +362,13 @@ function Sidebar({ user, onLogout, active, setActive, onQuicky,
                   onClick={() => setActive('shared')}
                 >
                   {item.icon}
-                  <span>{isTeamMode ? 'Teams' : isOrgMode ? 'Organization' : 'Shared'}</span>
+                  <span>{label}</span>
                 </button>
-                <div className="hp-sidebar-nested-list">
-                   {renderNestedTeams(teamTree, activeTeam?.id, (t) => {
-                     // logic to select team - this likely needs a callback from HomePage
-                     // For now, satisfy the UI by marking active
-                   })}
-                </div>
+                {isTeamMode && (
+                  <div className="hp-sidebar-nested-list">
+                    {renderNestedTeams(teamTree, activeTeam?.id, (t) => onSelectTeam?.(t))}
+                  </div>
+                )}
               </div>
             );
           }
@@ -385,12 +381,7 @@ function Sidebar({ user, onLogout, active, setActive, onQuicky,
             >
               {item.icon}
               <span>
-                {item.id === 'home' && (isTeamMode || isOrgMode) ? 'HOME' : 
-                 item.id === 'shared' ? (
-                   isTeamMode ? 'Teams' : 
-                   isOrgMode ? 'Organization' : 
-                   'Shared'
-                 ) : item.label}
+                {item.id === 'home' && (isTeamMode || isOrgMode) ? 'HOME' : item.label}
               </span>
             </button>
           );
@@ -434,8 +425,8 @@ function Sidebar({ user, onLogout, active, setActive, onQuicky,
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function HomePage({ user, onLogout }) {
   const {
-    activeTeam, clearTeam, isTeamMode, teamId,
-    activeOrg,  clearOrg,  isOrgMode,  orgId,
+    activeTeam, setActiveTeam, clearTeam, isTeamMode, teamId,
+    activeOrg,  clearOrg,     isOrgMode,  orgId,
   } = useTeam();
 
   // ── Data state ──────────────────────────────────────────────────────────────
@@ -536,25 +527,34 @@ export default function HomePage({ user, onLogout }) {
     try {
       let response;
       if (activeTab === 'favorites') {
-        response = await getFavoriteCollections(pageNumber, PAGE_SIZE, teamId, orgId);
+        // Backend filter='fav' → ListPaginatedFavByUserID, scoped by headers
+        response = await getCollections(pageNumber, PAGE_SIZE, 'fav', teamId, orgId);
       } else if (activeTab === 'shared') {
         if (teamId || orgId) {
-          // In Team/Org mode, 'shared' tab shows ALL collections in that scope
+          // Team/Org mode: shared tab shows ALL collections in the scope.
+          // applyScope with filter='' drops user_id in team/org mode → returns every team/org collection.
           response = await getCollections(pageNumber, PAGE_SIZE, '', teamId, orgId);
         } else {
-          // In Personal mode, 'shared' tab shows collections shared with the user
-          response = await getSharedCollections(pageNumber, PAGE_SIZE, teamId, orgId);
+          // Personal mode: filter='share' → _id != master_id → collections shared TO this user
+          response = await getCollections(pageNumber, PAGE_SIZE, 'share', null, null);
         }
       } else if (activeTab === 'home' && (teamId || orgId)) {
-        // 'home' tab in Team or Org mode shows only user-created collections
+        // Team/Org home: only the current user's own collections in that scope.
+        // filter='mine' → applyScope skipUserIDDelete=true → keeps user_id even in team/org mode
         response = await getCollections(pageNumber, PAGE_SIZE, 'mine', teamId, orgId);
       } else {
-        // default: 'home' in Personal mode, or other tabs
-        response = await getCollections(pageNumber, PAGE_SIZE, '', teamId, orgId);
+        // Personal home/collections tab: all personal collections (team_id=nil, org_id=nil)
+        response = await getCollections(pageNumber, PAGE_SIZE, '', null, null);
       }
 
-      const data = Array.isArray(response) ? response : (response?.collections ?? []);
-      setHasMore(data.length === PAGE_SIZE);
+      const raw = response;
+      const data = Array.isArray(raw) ? raw : (raw?.collections ?? []);
+      // Backend returns PaginatedCollectionResponse: { collections, total, page, limit, total_pages }
+      // Use total when available for accurate hasMore; fall back to page-size heuristic.
+      const total = raw?.total ?? null;
+      const currentPage = pageNumber;
+      const fetchedCount = data.length;
+      setHasMore(total !== null ? currentPage * PAGE_SIZE < total : fetchedCount === PAGE_SIZE);
 
       setFavIds(prev => {
         const next = new Set(prev);
@@ -656,6 +656,18 @@ export default function HomePage({ user, onLogout }) {
   );
 
   // ── Handlers ────────────────────────────────────────────────────────────────
+  const handleSelectTeam = useCallback((team) => {
+    setActiveTeam({
+      id: team.id,
+      name: team.name,
+      theme: team.theme,
+      description: team.description,
+      role: team.role,
+      member_count: team.member_count,
+      invite_link: team.invite_link,
+    });
+    setActiveTab('home');
+  }, [setActiveTeam]);
   const handleQuicky = useCallback(() => {
     setSelectedCollection({
       id: 'quicky', name: 'Quick Request', isQuicky: true,
@@ -712,6 +724,10 @@ export default function HomePage({ user, onLogout }) {
   }, [activeTab, isTeamMode, isOrgMode, activeOrg, activeTeam]);
 
   const showCollectionButtons = COLLECTION_TABS.has(activeTab);
+  const isPersonalMode = !teamId && !orgId;
+  // On the shared tab in team/org mode, "New Collection" creates a shared collection.
+  // On home/collections/favorites tabs, it creates a personal (user-scoped) collection.
+  const isSharedTab = activeTab === 'shared';
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -728,6 +744,7 @@ export default function HomePage({ user, onLogout }) {
         isOrgMode={isOrgMode}
         onClearTeam={clearTeam}
         onClearOrg={clearOrg}
+        onSelectTeam={handleSelectTeam}
         teams={teams}
       />
 
@@ -751,18 +768,24 @@ export default function HomePage({ user, onLogout }) {
             )}
             {showCollectionButtons && (
               <>
+                {/* Import is always available */}
                 <button className="hp-btn-new" onClick={() => setImportOpen(true)} style={{ background: '#4b5563', borderColor: '#4b5563' }}>
                   <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <path d="M6.5 1v8M3.5 6l3 3 3-3M1 11h11" />
                   </svg>
                   Import
                 </button>
-                <button className="hp-btn-new" onClick={openNewCollectionModal}>
-                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M6.5 1v11M1 6.5h11" />
-                  </svg>
-                  New Collection
-                </button>
+                {/* New Collection — always creates in the current scope (userId, userId+teamId, userId+orgId, userId+orgId+teamId).
+                    On the shared tab in team/org mode this becomes a global shared collection.
+                    Hidden on the shared tab when in personal mode (nothing to share to). */}
+                {!(isSharedTab && isPersonalMode) && (
+                  <button className="hp-btn-new" onClick={openNewCollectionModal}>
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M6.5 1v11M1 6.5h11" />
+                    </svg>
+                    New Collection
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -897,6 +920,9 @@ export default function HomePage({ user, onLogout }) {
                 />
               ))}
               {(activeTab === 'home' || activeTab === 'collections') && (
+                <NewCard style={{ animationDelay: `${filtered.length * 0.05}s` }} onClick={openNewCollectionModal} />
+              )}
+              {activeTab === 'shared' && !isPersonalMode && (
                 <NewCard style={{ animationDelay: `${filtered.length * 0.05}s` }} onClick={openNewCollectionModal} />
               )}
             </div>

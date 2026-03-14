@@ -5,6 +5,7 @@ import HomePage from './pages/HomePage';
 import AuthModal from './components/AuthModal';
 
 import { TeamProvider, useTeam } from './context/TeamContext';
+import { NotificationProvider } from './context/NotificationContext';
 import './App.css';
 
 // ─── Inner component that has access to TeamContext ───────────────────────────
@@ -67,7 +68,8 @@ export default function App() {
   }
 
   return (
-    <TeamProvider>
+    <NotificationProvider>
+      <TeamProvider>
         <div className="app">
           {isLoggedIn ? (
             <AuthedApp
@@ -84,8 +86,8 @@ export default function App() {
               onSuccess={handleLoginSuccess}
             />
           )}
-          </div>
-
-    </TeamProvider>
+        </div>
+      </TeamProvider>
+    </NotificationProvider>
   );
 }

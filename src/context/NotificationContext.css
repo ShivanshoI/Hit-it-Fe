@@ -1,0 +1,173 @@
+/* Notification Container & Toasts */
+.nt-toast-container {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+
+.nt-toast {
+  pointer-events: auto;
+  min-width: 300px;
+  max-width: 450px;
+  padding: 1rem 1.25rem;
+  background: rgba(20, 20, 22, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  animation: nt-slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.nt-toast--success {
+  border-left: 4px solid #10b981;
+}
+
+.nt-toast--error {
+  border-left: 4px solid #ef4444;
+}
+
+.nt-toast--info {
+  border-left: 4px solid #6c3fc5;
+}
+
+.nt-toast-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.nt-toast--success .nt-toast-icon { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.nt-toast--error .nt-toast-icon { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.nt-toast--info .nt-toast-icon { background: rgba(108, 63, 197, 0.15); color: #a07ee8; }
+
+.nt-toast-message {
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* Modal Styling */
+.nt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: nt-fade-in 0.3s ease;
+}
+
+.nt-modal {
+  width: 100%;
+  max-width: 440px;
+  background: #141416;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  animation: nt-modal-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.nt-modal-header {
+  padding: 1.75rem 2rem 1rem;
+}
+
+.nt-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.nt-modal-body {
+  padding: 0.5rem 2rem 2rem;
+}
+
+.nt-modal-body p {
+  margin: 0;
+  color: #94949e;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.nt-modal-footer {
+  padding: 1.5rem 2rem;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.nt-btn {
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+}
+
+.nt-btn--cancel {
+  background: transparent;
+  color: #94949e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.nt-btn--cancel:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.nt-btn--confirm {
+  background: #6c3fc5;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(108, 63, 197, 0.3);
+}
+
+.nt-btn--confirm:hover {
+  background: #7c4fd6;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(108, 63, 197, 0.4);
+}
+
+.nt-btn--confirm:active {
+  transform: translateY(0);
+}
+
+/* Animations */
+@keyframes nt-slide-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes nt-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes nt-modal-pop {
+  from { transform: scale(0.9) translateY(20px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}

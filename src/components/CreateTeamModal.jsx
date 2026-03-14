@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTeam, PALETTES } from '../context/TeamContext';
 import { createTeam, inviteByEmail } from '../api/teams.api';
+import { useScrollLock } from '../hooks/useScrollLock';
+import { useNotification } from '../context/NotificationContext';
 import './CreateTeamModal.css';
 
 const THEME_OPTIONS = Object.entries(PALETTES).map(([key, val]) => ({
@@ -11,6 +13,8 @@ const THEME_OPTIONS = Object.entries(PALETTES).map(([key, val]) => ({
 
 export default function CreateTeamModal({ onClose, onCreated }) {
   const { isOrgMode, orgId } = useTeam();
+  const { showToast } = useNotification();
+  useScrollLock();
 
   const [name, setName] = useState('');
   const [theme, setTheme] = useState('purple');
@@ -74,7 +78,7 @@ export default function CreateTeamModal({ onClose, onCreated }) {
       setStep('success');
     } catch (err) {
       console.error('Failed to create team:', err);
-      alert(err.message || 'Failed to create team. Please try again.');
+      showToast(err.message || 'Failed to create team. Please try again.', 'error');
     } finally {
       setLoading(false);
     }

@@ -5,10 +5,12 @@ import { getOrganizationDetails, verifyOrganization } from '../api/orgs.api';
 import CreateTeamModal from './CreateTeamModal';
 import JoinTeamModal from './JoinTeamModal';
 import TeamMembersModal from './TeamMembersModal';
+import { useNotification } from '../context/NotificationContext';
 import './TeamPanel.css';
 
 export default function TeamPanel({ user }) {
   const { activeTeam, setActiveTeam, clearTeam, isTeamMode, isOrgMode, clearOrg, setActiveOrg, activeOrg, orgId } = useTeam();
+  const { showToast } = useNotification();
   const [teams, setTeams] = useState([]);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -34,10 +36,8 @@ export default function TeamPanel({ user }) {
       setLoadingTeams(true);
       setLoadingOrg(true);
 
-      console.log('DEBUG: User OrgID:', user?.organizationId);
-      
-      // Issue requests in parallel
-      const apiCalls = [getMyTeams(isOrgMode ? orgId : null).catch(err => { console.error(err); return []; })];
+      // Always pass orgId when available so teams are filtered by org
+      const apiCalls = [getMyTeams(orgId || null).catch(err => { console.error(err); return []; })];
       
       // Only auto-fetch org if we are already in Org Mode
       // If we only have user.organizationId (affiliation but not active), we let the user click "Connect"
@@ -73,18 +73,25 @@ export default function TeamPanel({ user }) {
     if (!searchId) return;
     try {
       setIsSearching(true);
+      // Step 1: verify/connect (stamps user.organization_id in DB)
       const res = await verifyOrganization(searchId);
-      const verifiedOrg = res?.org || (res.success ? res : null);
-      
-      if (!verifiedOrg || (Array.isArray(verifiedOrg) && verifiedOrg.length === 0)) {
-        alert('No organization found or verification failed.');
+      if (!res?.success) {
+        showToast('No organization found or verification failed.', 'error');
+        setOrgData(null);
+        return;
+      }
+      // Step 2: fetch full details — VerifyResponse only returns { id, name, is_verified },
+      // but we need member_count and role for the org card.
+      const detailsRes = await getOrganizationDetails(searchId);
+      const fullOrg = detailsRes?.org || detailsRes;
+      if (!fullOrg || (Array.isArray(fullOrg) && fullOrg.length === 0)) {
+        showToast('Connected, but failed to load organization details.', 'error');
         setOrgData(null);
       } else {
-        setOrgData({ ...verifiedOrg, is_verified: true });
-        setIsSearching(false);
+        setOrgData({ ...fullOrg, is_verified: true });
       }
     } catch (err) {
-      alert(err.message || 'Error connecting to organization.');
+      showToast(err.message || 'Error connecting to organization.', 'error');
     } finally {
       setIsSearching(false);
     }
@@ -100,14 +107,17 @@ export default function TeamPanel({ user }) {
     try {
       setVerifying(true);
       const res = await verifyOrganization(orgData.id);
-      // Use res.org if present (consistent with provided JSON spec)
-      const verifiedOrg = res?.org || (res.success ? orgData : null);
-      
-      if (verifiedOrg) {
-        setOrgData({ ...verifiedOrg, is_verified: true });
+      // VerifyResponse.Org is VerifiedOrgDetails — only { id, name, is_verified }.
+      // We must re-fetch via GetDetails to get member_count and role.
+      if (res?.success) {
+        const detailsRes = await getOrganizationDetails(orgData.id);
+        const fullOrg = detailsRes?.org || detailsRes;
+        if (fullOrg) {
+          setOrgData({ ...fullOrg, is_verified: true });
+        }
       }
     } catch (err) {
-      alert(err.message || 'Failed to verify organization.');
+      showToast(err.message || 'Failed to verify organization.', 'error');
     } finally {
       setVerifying(false);
     }
@@ -189,9 +199,16 @@ export default function TeamPanel({ user }) {
                 <button 
                   className="hp-btn-new"
                   onClick={() => handleManualSearch(user.organizationId)}
+                  disabled={isTeamMode}
+                  title={isTeamMode ? 'Leave your current team before connecting to an organization' : undefined}
                 >
                   Connect to Organization
                 </button>
+                {isTeamMode && (
+                  <p style={{ fontSize: '0.75rem', marginTop: '0.6rem', opacity: 0.6, color: 'var(--text-dim)' }}>
+                    Leave your current team workspace first to connect an organization.
+                  </p>
+                )}
                 <div style={{ marginTop: '1.2rem' }}>
                   <button 
                     style={{ background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
@@ -235,7 +252,8 @@ export default function TeamPanel({ user }) {
           <div 
             className={`hp-org-card ${isOrgMode ? 'hp-org-card--active' : ''}`}
             onClick={() => {
-              if (!orgData.is_verified) return; // Prevent clicking into unverified orgs
+              if (!orgData.is_verified) return;
+              if (isTeamMode && !isOrgMode) return; // can't connect org while in a team
               if (isOrgMode) {
                 clearOrg();
               } else {
@@ -243,7 +261,7 @@ export default function TeamPanel({ user }) {
               }
             }}
             style={{
-              cursor: orgData.is_verified ? 'pointer' : 'default',
+              cursor: (orgData.is_verified && !isTeamMode) || isOrgMode ? 'pointer' : 'default',
               border: isOrgMode ? '2px solid var(--purple)' : '1px solid var(--border)',
               background: isOrgMode ? 'var(--purple-dim)' : 'var(--surface)',
               transition: 'all 0.2s',
@@ -275,7 +293,11 @@ export default function TeamPanel({ user }) {
                   <>
                     <span className="hp-meta-dot">•</span>
                     <span className="hp-meta-muted">
-                      {isOrgMode ? 'Currently Active Workspace' : 'Click to enter Organization Workspace'}
+                      {isOrgMode
+                        ? 'Currently Active Workspace'
+                        : isTeamMode
+                        ? 'Leave team mode first to connect'
+                        : 'Click to enter Organization Workspace'}
                     </span>
                   </>
                 )}

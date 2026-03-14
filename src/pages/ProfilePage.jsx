@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import './ProfilePage.css';
 import { getProfileStats, getRecentActivity, updateProfile, updatePassword, signOutAllDevices } from '../api/profile.api';
+import { useNotification } from '../context/NotificationContext';
 
 export default function ProfilePage({ user, onLogout }) {
+  const { showConfirm } = useNotification();
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -95,7 +97,8 @@ export default function ProfilePage({ user, onLogout }) {
   };
 
   const handleSignOutAll = async () => {
-    if (!window.confirm('This will sign you out of all active sessions on other devices. Continue?')) return;
+    const confirmed = await showConfirm('This will sign you out of all active sessions on other devices. Continue?', 'Sign Out Everywhere');
+    if (!confirmed) return;
     try {
       await signOutAllDevices();
       onLogout(); // Final locally clear too
