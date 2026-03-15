@@ -132,7 +132,7 @@ export async function getMe() {
  * @param {object} raw  — user object straight from the server
  * @returns {NormalisedUser}
  */
-function normaliseUser(raw) {
+export function normaliseUser(raw) {
   return {
     id:             raw.id,
     firstName:      raw.first_name,
@@ -142,6 +142,7 @@ function normaliseUser(raw) {
     email:          raw.email_address,
     phoneNumber:    raw.phone_number,
     organizationId: raw.organizationId, // Preserving the ID for verification
+    hasPassword:    raw.has_password,
     createdAt:      raw.created_at,
     updatedAt:      raw.updated_at,
   };

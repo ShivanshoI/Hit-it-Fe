@@ -77,15 +77,19 @@ export default function ProfilePage({ user, onLogout }) {
 
   const handlePasswordUpdate = async (e) => {
     e.preventDefault();
-    if (!currentPassword || !newPassword) {
-      setPasswordMessage({ text: 'Please fill in all fields.', type: 'error' });
+    if (user?.hasPassword !== false && !currentPassword) {
+      setPasswordMessage({ text: 'Please fill in current password.', type: 'error' });
+      return;
+    }
+    if (!newPassword) {
+      setPasswordMessage({ text: 'Please fill in new password.', type: 'error' });
       return;
     }
     setIsUpdatingPassword(true);
     setPasswordMessage({ text: '', type: '' });
     try {
       await updatePassword({ currentPassword, newPassword });
-      setPasswordMessage({ text: 'Password updated successfully!', type: 'success' });
+      setPasswordMessage({ text: `Password ${user?.hasPassword === false ? 'set' : 'updated'} successfully!`, type: 'success' });
       setCurrentPassword('');
       setNewPassword('');
       setTimeout(() => setPasswordMessage({ text: '', type: '' }), 3000);
@@ -288,19 +292,21 @@ export default function ProfilePage({ user, onLogout }) {
                     {passwordMessage.text}
                   </div>
                 )}
-                <div className="pp-form-group">
-                  <label>Current Password</label>
-                  <input 
-                    type="password" 
-                    value={currentPassword} 
-                    onChange={e => setCurrentPassword(e.target.value)} 
-                    placeholder="••••••••" 
-                    className="pp-input" 
-                  />
-                  <small style={{ color: 'var(--text-dim)', fontSize: '0.75rem', marginTop: '0.2rem' }}>
-                    Enter your current password to confirm the change
-                  </small>
-                </div>
+                {user?.hasPassword !== false && (
+                  <div className="pp-form-group">
+                    <label>Current Password</label>
+                    <input 
+                      type="password" 
+                      value={currentPassword} 
+                      onChange={e => setCurrentPassword(e.target.value)} 
+                      placeholder="••••••••" 
+                      className="pp-input" 
+                    />
+                    <small style={{ color: 'var(--text-dim)', fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                      Enter your current password to confirm the change
+                    </small>
+                  </div>
+                )}
                 <div className="pp-form-group">
                   <label>New Password</label>
                   <input 
@@ -314,7 +320,7 @@ export default function ProfilePage({ user, onLogout }) {
                 <div className="pp-form-actions">
                   <button type="button" className="pp-btn-danger" onClick={handleSignOutAll}>Sign Out on All Devices</button>
                   <button type="submit" className="pp-btn-primary" disabled={isUpdatingPassword}>
-                    {isUpdatingPassword ? 'Updating...' : 'Update Password'}
+                    {isUpdatingPassword ? (user?.hasPassword === false ? 'Setting...' : 'Updating...') : (user?.hasPassword === false ? 'Set Password' : 'Update Password')}
                   </button>
                 </div>
               </form>
