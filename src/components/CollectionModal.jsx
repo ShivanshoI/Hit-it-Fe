@@ -5,6 +5,8 @@ import { createCollectionRequest, updateCollectionRequest, getCollectionRequests
 import { useTeam } from '../context/TeamContext';
 import { getActivities, sendActivity, resolveIssueApi, queryAiAssistant } from '../api/activity_feed.api';
 import { tokenStore } from '../api';
+import { getVariables } from '../api/variables.api';
+import { getOverrides } from '../api/overrides.api';
 import './CollectionModal.css';
 
 // ─── Per-collection request shape (what the backend will return in future) ────
@@ -174,7 +176,7 @@ function SharedPicker({ suggestions, onPick, anchor }) {
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
           <path d="M5 1v8M1 5h8"/>
         </svg>
-        Shared across collection
+        Shadow History
       </div>
       {suggestions.map((s,i) => (
         <button key={i} className="cm-shared-pick-item" onClick={() => onPick(s)}>
@@ -186,11 +188,33 @@ function SharedPicker({ suggestions, onPick, anchor }) {
   );
 }
 
+function GlobalPicker({ suggestions, onPick }) {
+  if (!suggestions.length) return null;
+  return (
+    <div className="cm-global-picker">
+      <div className="cm-global-picker-label">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+          <circle cx="5" cy="5" r="3.5"/><path d="M5 1.5v7M1.5 5h7"/>
+        </svg>
+        From Globals
+      </div>
+      {suggestions.map((s,i) => (
+        <button key={i} className="cm-global-pick-item" onClick={() => onPick(s)}>
+          <span className="cm-global-pick-key">{s.k}</span>
+          <span className="cm-global-pick-val">{'{{' + s.k + '}}'}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── KV Row with shared picker ────────────────────────────────────────────────
-function KVRow({ row, sharedSuggestions, onChange, onDelete, onPickShared, isReadOnly }) {
+function KVRow({ row, sharedSuggestions, globalSuggestions, onChange, onDelete, onPickShared, isReadOnly }) {
   const [keyFocus, setKeyFocus] = useState(false);
   const [valFocus, setValFocus] = useState(false);
-  const showPicker = (keyFocus || valFocus) && !row.k && sharedSuggestions.length > 0;
+  const isFocused = keyFocus || valFocus;
+  const showShadow = isFocused && !row.k && sharedSuggestions.length > 0;
+  const showGlobal = isFocused && !row.k && globalSuggestions.length > 0;
 
   return (
     <div className="cm-kv-row-wrap">
@@ -215,10 +239,16 @@ function KVRow({ row, sharedSuggestions, onChange, onDelete, onPickShared, isRea
         />
         {!isReadOnly && <button className="cm-kv-del" onClick={onDelete}>×</button>}
       </div>
-      {showPicker && (
+      {showShadow && (
         <SharedPicker
           suggestions={sharedSuggestions}
           onPick={s => { onChange(s); setKeyFocus(false); setValFocus(false); }}
+        />
+      )}
+      {showGlobal && (
+        <GlobalPicker
+          suggestions={globalSuggestions}
+          onPick={s => { onChange({ k: s.k, v: '{{' + s.k + '}}' }); setKeyFocus(false); setValFocus(false); }}
         />
       )}
     </div>
@@ -1226,7 +1256,24 @@ export default function CollectionModal({ collection, onClose, recentCollections
   const shareRef                              = useRef(null);
   const [requestNote, setRequestNote]         = useState('');
   const [globalStoreOpen, setGlobalStoreOpen] = useState(false);
-  const globals = []; // Fallback as this seems to satisfy line 1990 without crashing
+  const [globalVars, setGlobalVars]           = useState([]);
+  const [globalOverrides, setGlobalOverrides] = useState({});
+  const globals = globalVars; // Keep backward compat for the auth hint section
+
+  // Fetch global variables and collection overrides for suggestions
+  useEffect(() => {
+    const loadGlobals = async () => {
+      try {
+        const [vars, overrides] = await Promise.all([
+          getVariables(),
+          collection?.id ? getOverrides(collection.id) : Promise.resolve({})
+        ]);
+        setGlobalVars(vars);
+        setGlobalOverrides(overrides);
+      } catch (err) { console.error('Failed to load globals for suggestions', err); }
+    };
+    loadGlobals();
+  }, [collection?.id]);
 
   const recentTimer                           = useRef(null);
   const [editingName, setEditingName]         = useState(false);
@@ -1340,6 +1387,19 @@ export default function CollectionModal({ collection, onClose, recentCollections
     return [...seen.entries()].map(([k, v]) => ({ k, v })).filter(s => !kvState.params.some(p => p.k === s.k));
   }, [shadowHistory, kvState.params]);
 
+  // ── Global Variable Suggestions (golden picker) ──────────────────────────────
+  const globalHeaderSuggestions = useMemo(() => {
+    return globalVars
+      .map(v => ({ k: v.key, v: v.values?.dev || '' }))
+      .filter(s => !kvState.headers.some(h => h.k === s.k)); // Dedup: hide keys already in use
+  }, [globalVars, kvState.headers]);
+
+  const globalParamSuggestions = useMemo(() => {
+    return globalVars
+      .map(v => ({ k: v.key, v: v.values?.dev || '' }))
+      .filter(s => !kvState.params.some(p => p.k === s.k)); // Dedup: hide keys already in use
+  }, [globalVars, kvState.params]);
+
   const updateHeader = (i, val) => setKvState(prev => ({ ...prev, headers: prev.headers.map((h,j)=>j===i?val:h) }));
   const deleteHeader = (i)      => setKvState(prev => ({ ...prev, headers: prev.headers.filter((_,j)=>j!==i) }));
   const addHeader    = ()       => setKvState(prev => ({ ...prev, headers: [...prev.headers, { k:'', v:'' }] }));
@@ -1452,9 +1512,32 @@ export default function CollectionModal({ collection, onClose, recentCollections
     }
   };
 
+  // ── Variable substitution engine ──────────────────────────────────────────────
+  // Replaces {{key}} with the resolved value at send time.
+  // Priority: Collection Override > Global Default
+  const resolveVariables = useCallback((text) => {
+    if (!text || typeof text !== 'string') return text;
+    return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+      // Check collection override first
+      const overrideVal = globalOverrides?.[key]?.dev; // TODO: use activeEnv when environments are wired
+      if (overrideVal) return overrideVal;
+      // Fallback to global default
+      const globalVar = globalVars.find(v => v.key === key);
+      if (globalVar) return globalVar.values?.dev || match; // TODO: use activeEnv
+      return match; // Leave as-is if no match
+    });
+  }, [globalVars, globalOverrides]);
+
   const handleSend = async () => {
     setLoading(true); setResponse('');
     
+    // Resolve all {{variables}} before sending
+    const resolvedUrl = resolveVariables(url);
+    const resolvedHeaders = kvState.headers.map(h => ({ ...h, k: resolveVariables(h.k), v: resolveVariables(h.v) }));
+    const resolvedParams = kvState.params.map(p => ({ ...p, k: resolveVariables(p.k), v: resolveVariables(p.v) }));
+    const resolvedBody = resolveVariables(kvState.body);
+    const resolvedToken = resolveVariables(kvState.token);
+
     // Auto-save request details to backend before sending
     try {
       let currentActiveId = activeCurl?.id;
@@ -1908,6 +1991,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
                     <KVRow
                       key={i} row={row}
                       sharedSuggestions={sharedHeaders}
+                      globalSuggestions={globalHeaderSuggestions}
                       onChange={val=>updateHeader(i,val)}
                       onDelete={()=>deleteHeader(i)}
                       isReadOnly={!canEdit}
@@ -1919,7 +2003,15 @@ export default function CollectionModal({ collection, onClose, recentCollections
                       <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                         <path d="M5.5 1v9M1 5.5l9 0z"/>
                       </svg>
-                      {sharedHeaders.length} header{sharedHeaders.length!==1?'s':''} inherited from Shadow History. Focus an empty row to use them.
+                      {sharedHeaders.length} header{sharedHeaders.length!==1?'s':''} from Shadow History. Focus an empty row to use them.
+                    </div>
+                  )}
+                  {globalHeaderSuggestions.length>0 && (
+                    <div className="cm-global-banner">
+                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                        <circle cx="5.5" cy="5.5" r="4"/><path d="M5.5 1.5v8M1.5 5.5h8"/>
+                      </svg>
+                      {globalHeaderSuggestions.length} header{globalHeaderSuggestions.length!==1?'s':''} available from Globals. Focus an empty row to use them.
                     </div>
                   )}
                 </div>
@@ -1933,6 +2025,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
                     <KVRow
                       key={i} row={row}
                       sharedSuggestions={sharedParams}
+                      globalSuggestions={globalParamSuggestions}
                       onChange={val=>updateParam(i,val)}
                       onDelete={()=>deleteParam(i)}
                       isReadOnly={!canEdit}
@@ -1944,7 +2037,15 @@ export default function CollectionModal({ collection, onClose, recentCollections
                       <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                         <path d="M5.5 1v9M1 5.5l9 0z"/>
                       </svg>
-                      {sharedParams.length} param{sharedParams.length!==1?'s':''} inherited from Shadow History. Focus an empty row to use them.
+                      {sharedParams.length} param{sharedParams.length!==1?'s':''} from Shadow History. Focus an empty row to use them.
+                    </div>
+                  )}
+                  {globalParamSuggestions.length>0 && (
+                    <div className="cm-global-banner">
+                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                        <circle cx="5.5" cy="5.5" r="4"/><path d="M5.5 1.5v8M1.5 5.5h8"/>
+                      </svg>
+                      {globalParamSuggestions.length} param{globalParamSuggestions.length!==1?'s':''} available from Globals. Focus an empty row to use them.
                     </div>
                   )}
                 </div>
@@ -2197,6 +2298,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
 
     {globalStoreOpen && (
       <GlobalStore
+        collectionId={collection?.id}
         collectionName={collection?.name}
         onClose={() => setGlobalStoreOpen(false)}
       />

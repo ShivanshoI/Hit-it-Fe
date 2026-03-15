@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { getVariables, createVariable, updateVariable, deleteVariable } from '../api/variables.api';
+import { getOverrides, saveOverrides } from '../api/overrides.api';
 import './GlobalStore.css';
 
 // ─── Initial Data ─────────────────────────────────────────────────────────────
@@ -14,42 +16,6 @@ const INITIAL_CATEGORIES = [
   { id: 'infra',   label: 'Infra',      color: '#10b981' },
   { id: 'secrets', label: 'Secrets',    color: '#ef4444' },
 ];
-
-const INITIAL_VARS = [
-  {
-    id: 1, key: 'auth_token', category: 'auth', secret: true, description: 'JWT bearer for all requests', tags: ['auth', 'jwt'],
-    values: { dev: 'eyJhbGciOiJIUzI1NiJ9.dev_token', staging: 'eyJhbGciOiJIUzI1NiJ9.staging_token', prod: 'eyJhbGciOiJIUzI1NiJ9.prod_token' },
-  },
-  {
-    id: 2, key: 'base_url', category: 'api', secret: false, description: 'Root API endpoint', tags: ['url'],
-    values: { dev: 'https://dev.api.hitit.io', staging: 'https://staging.api.hitit.io', prod: 'https://api.hitit.io' },
-  },
-  {
-    id: 3, key: 'client_secret', category: 'secrets', secret: true, description: 'OAuth2 client secret', tags: ['auth', 'oauth'],
-    values: { dev: 'sk_dev_abc123xyz', staging: 'sk_stg_def456uvw', prod: 'sk_live_ghi789rst' },
-  },
-  {
-    id: 4, key: 'timeout_ms', category: 'infra', secret: false, description: 'Request timeout in milliseconds', tags: ['config'],
-    values: { dev: '5000', staging: '3000', prod: '2000' },
-  },
-  {
-    id: 5, key: 'rate_limit', category: 'infra', secret: false, description: 'Max requests per minute', tags: ['config', 'limits'],
-    values: { dev: '1000', staging: '500', prod: '100' },
-  },
-  {
-    id: 6, key: 'stripe_key', category: 'secrets', secret: true, description: 'Stripe publishable API key', tags: ['payments'],
-    values: { dev: 'pk_test_abc123', staging: 'pk_test_def456', prod: 'pk_live_ghi789' },
-  },
-];
-
-const COLLECTION_OVERRIDES = {
-  'Auth Service': {
-    auth_token: { dev: 'eyJhbGciOiJIUzI1NiJ9.auth_service_override', staging: '', prod: '' },
-  },
-  'Payment Gateway': {
-    stripe_key: { dev: 'pk_test_payment_specific', staging: '', prod: '' },
-  },
-};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function maskSecret(val) {
@@ -73,15 +39,22 @@ function Tag({ label, onRemove }) {
 }
 
 // ─── Variable row ─────────────────────────────────────────────────────────────
-function VarRow({ variable, envs, categories, activeEnv, collectionName, onUpdate, onDelete, revealed, onToggleReveal }) {
+function VarRow({ variable, envs, categories, activeEnv, collectionId, overrides, onUpdate, onUpdateOverride, onDelete, revealed, onToggleReveal }) {
   const [expanded, setExpanded] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
   const cat = categories.find(c => c.id === variable.category);
-  const override = collectionName && COLLECTION_OVERRIDES[collectionName]?.[variable.key];
+  const override = overrides?.[variable.key];
   const effectiveVal = (override?.[activeEnv] || variable.values[activeEnv] || '');
   const isOverridden = override && !!override[activeEnv];
 
-  const updateValue = (env, val) => onUpdate({ ...variable, values: { ...variable.values, [env]: val } });
+  const updateValue = (env, val) => {
+    if (collectionId) {
+      // If we are in a collection, update the override instead of the global default
+      onUpdateOverride(variable.key, env, val);
+    } else {
+      onUpdate({ ...variable, values: { ...variable.values, [env]: val } });
+    }
+  };
   const addTag = () => {
     const t = tagDraft.trim().toLowerCase().replace(/\s+/g,'-');
     if (t && !variable.tags.includes(t)) onUpdate({ ...variable, tags: [...variable.tags, t] });
@@ -197,14 +170,13 @@ function VarRow({ variable, envs, categories, activeEnv, collectionName, onUpdat
                     <input
                       className={`gs-env-input ${variable.secret && !revealed ? 'masked' : ''}`}
                       type={variable.secret && !revealed ? 'password' : 'text'}
-                      value={variable.values[env.id] || ''}
+                      value={(override?.[env.id] || variable.values[env.id] || '')}
                       onChange={e => updateValue(env.id, e.target.value)}
                       placeholder="— not set —"
                     />
-                    {ovVal && (
-                      <div className="gs-env-override-val">
-                        <span className="gs-override-badge">override</span>
-                        <span className="gs-override-val-text">{variable.secret && !revealed ? maskSecret(ovVal) : ovVal}</span>
+                    {isOverridden && (
+                      <div className="gs-env-override-val" title="Using collection-specific value">
+                        <span className="gs-override-badge">override active</span>
                       </div>
                     )}
                   </div>
@@ -310,8 +282,10 @@ function AddVarForm({ envs, categories, onAdd, onClose }) {
 }
 
 // ─── Main Global Store Panel ───────────────────────────────────────────────────
-export default function GlobalStore({ collectionName, onClose }) {
-  const [vars, setVars]               = useState(INITIAL_VARS);
+export default function GlobalStore({ collectionId, collectionName, onClose }) {
+  const [vars, setVars]               = useState([]);
+  const [overrides, setOverrides]     = useState({});
+  const [loading, setLoading]         = useState(true);
   const [envs]                        = useState(INITIAL_ENVS);
   const [categories, setCategories]   = useState(INITIAL_CATEGORIES);
   const [activeEnv, setActiveEnv]     = useState('dev');
@@ -324,6 +298,26 @@ export default function GlobalStore({ collectionName, onClose }) {
   const [showCatEdit, setShowCatEdit] = useState(false);
   const [closing, setClosing]         = useState(false);
   const panelRef = useRef(null);
+
+  // Load data
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [vData, oData] = await Promise.all([
+          getVariables(),
+          collectionId ? getOverrides(collectionId) : Promise.resolve({})
+        ]);
+        setVars(vData);
+        setOverrides(oData);
+      } catch (err) {
+        console.error('Failed to load GlobalStore data', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [collectionId]);
 
   // Smooth close — play exit animation then unmount
   const handleClose = useCallback(() => {
@@ -380,18 +374,32 @@ export default function GlobalStore({ collectionName, onClose }) {
 
   const updateVar = async (id, updated) => {
     try {
-      setVars(p => p.map(v => v.id===id ? updated : v));
+      const res = await updateVariable(id, updated);
+      setVars(p => p.map(v => v.id===id ? res : v));
     } catch (err) { console.error(err); }
   };
   const deleteVar = async (id) => {
     try {
+      await deleteVariable(id);
       setVars(p => p.filter(v => v.id!==id));
     } catch (err) { console.error(err); }
   };
   const addVar = async (v) => {
     try {
-      const newVar = { ...v, id: Date.now() }; // Mock assigning an ID
-      setVars(p => [...p, newVar]);
+      const res = await createVariable(v);
+      setVars(p => [...p, res]);
+    } catch (err) { console.error(err); }
+  };
+
+  const updateOverride = async (key, env, val) => {
+    if (!collectionId) return;
+    try {
+      const newOverrides = { 
+        ...overrides, 
+        [key]: { ...(overrides[key] || {}), [env]: val } 
+      };
+      setOverrides(newOverrides);
+      await saveOverrides(collectionId, newOverrides);
     } catch (err) { console.error(err); }
   };
   const toggleReveal = (id)       => setRevealed(r => ({ ...r, [id]: !r[id] }));
@@ -533,36 +541,47 @@ export default function GlobalStore({ collectionName, onClose }) {
 
         {/* Variable list */}
         <div className="gs-list">
-          {grouped.length === 0 && (
+          {loading ? (
             <div className="gs-empty">
-              <div className="gs-empty-icon">◎</div>
-              <p>No variables match your filters</p>
-              <button className="gs-empty-reset" onClick={()=>{ setSearch(''); setFilterCat('all'); setFilterTag(''); }}>Clear filters</button>
+              <div style={{ animation: 'hp-spin 0.8s linear infinite', border: '2px solid var(--purple)', borderTopColor: 'transparent', borderRadius: '50%', width: '24px', height: '24px' }} />
+              <p>Loading variables…</p>
             </div>
-          )}
-          {grouped.map(({ cat, items }) => (
-            <div key={cat.id} className="gs-group">
-              <div className="gs-group-label">
-                <EnvDot color={cat.color}/>
-                <span>{cat.label}</span>
-                <span className="gs-group-count">{items.length}</span>
-              </div>
-              {items.map(v => (
-                <VarRow
-                  key={v.id}
-                  variable={v}
-                  envs={envs}
-                  categories={categories}
-                  activeEnv={activeEnv}
-                  collectionName={collectionName}
-                  onUpdate={updated => updateVar(v.id, updated)}
-                  onDelete={() => deleteVar(v.id)}
-                  revealed={!!revealed[v.id]}
-                  onToggleReveal={() => toggleReveal(v.id)}
-                />
+          ) : (
+            <>
+              {grouped.length === 0 && (
+                <div className="gs-empty">
+                  <div className="gs-empty-icon">◎</div>
+                  <p>No variables match your filters</p>
+                  <button className="gs-empty-reset" onClick={()=>{ setSearch(''); setFilterCat('all'); setFilterTag(''); }}>Clear filters</button>
+                </div>
+              )}
+              {grouped.map(({ cat, items }) => (
+                <div key={cat.id} className="gs-group">
+                  <div className="gs-group-label">
+                    <EnvDot color={cat.color}/>
+                    <span>{cat.label}</span>
+                    <span className="gs-group-count">{items.length}</span>
+                  </div>
+                  {items.map(v => (
+                    <VarRow
+                      key={v.id}
+                      variable={v}
+                      envs={envs}
+                      categories={categories}
+                      activeEnv={activeEnv}
+                      collectionId={collectionId}
+                      overrides={overrides}
+                      onUpdate={updated => updateVar(v.id, updated)}
+                      onUpdateOverride={updateOverride}
+                      onDelete={() => deleteVar(v.id)}
+                      revealed={!!revealed[v.id]}
+                      onToggleReveal={() => toggleReveal(v.id)}
+                    />
+                  ))}
+                </div>
               ))}
-            </div>
-          ))}
+            </>
+          )}
         </div>
 
         {/* Footer */}
