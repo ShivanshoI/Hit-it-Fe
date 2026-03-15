@@ -113,7 +113,7 @@ Hit-IT supports dynamic variable injection using the `{{key}}` syntax.
 ## 🤖 Activity & Real-time Feed (`activity_feed.api.jsx` & WS)
 
 ### 1. Feed WebSocket
-- **URL**: `ws://localhost:8080/api/v1/ws/:collectionId?token=...`
+- **URL**: `wss://hitit-backend-199827594435.asia-south1.run.app/api/v1/ws/:collectionId?token=...`
 - **Objective**: Real-time chats and AI responses within a collection.
 
 ### 2. Query AI Assistant

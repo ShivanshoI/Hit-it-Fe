@@ -100,5 +100,5 @@ export async function getInvoices(page = 1, limit = 20) {
  * Used as an <a href> so the browser handles the redirect natively.
  */
 export function buildInvoiceDownloadUrl(invoiceId) {
-  return `http://localhost:8080/api/billing/invoices/${invoiceId}/download`;
+  return `https://hitit-backend-199827594435.asia-south1.run.app/api/billing/invoices/${invoiceId}/download`;
 }

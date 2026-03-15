@@ -448,7 +448,7 @@ function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
     if (!open || !collectionId) return;
 
     const token = tokenStore.get();
-    const wsUrl = `ws://localhost:8080/api/v1/ws/${collectionId}?token=${token}`;
+    const wsUrl = `wss://hitit-backend-199827594435.asia-south1.run.app/api/v1/ws/${collectionId}?token=${token}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
