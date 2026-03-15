@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
-import { signIn, signUp } from '../api/auth.api';
-import { signInWithGoogle } from '../api/auth.google.api';
+import { signIn } from '../api/auth.api';
+import { signInWithGoogle, createGoogleAccount } from '../api/auth.google.api';
 import { ApiError } from '../api';
 import './AuthModal.css';
 
-
-
 // ─── Field ────────────────────────────────────────────────────────────────────
-function Field({ label, required, optional, type = 'text', placeholder, value, onChange, error, autoFocus }) {
+function Field({ label, required, optional, type = 'text', placeholder, value, onChange, error, autoFocus, disabled }) {
   return (
     <div className="am-field">
       <label>
@@ -22,25 +20,9 @@ function Field({ label, required, optional, type = 'text', placeholder, value, o
         onChange={(e) => onChange(e.target.value)}
         className={error ? 'error' : ''}
         autoFocus={autoFocus}
+        disabled={disabled}
       />
       {error && <span className="am-err">{error}</span>}
-    </div>
-  );
-}
-
-// ─── Stepper ──────────────────────────────────────────────────────────────────
-function Stepper({ step }) {
-  return (
-    <div className="am-stepper">
-      {['Details', 'Contact'].map((label, i) => (
-        <div key={label} className="am-step-wrap">
-          <div className={`am-step-dot ${i < step ? 'done' : i === step ? 'active' : ''}`}>
-            {i < step ? '✓' : i + 1}
-          </div>
-          <span className={`am-step-label ${i === step ? 'active' : ''}`}>{label}</span>
-          {i < 1 && <div className={`am-step-line ${i < step ? 'done' : ''}`} />}
-        </div>
-      ))}
     </div>
   );
 }
@@ -54,9 +36,9 @@ export default function AuthModal({ onClose, onSuccess }) {
   const [loginForm, setLoginForm] = useState({ identifier: '', password: '' });
   const [loginErr, setLoginErr] = useState({});
 
-  const [regForm, setRegForm] = useState({ firstName: '', lastName: '', email: '', phone: '', nickname: '' });
+  const [regForm, setRegForm] = useState({ firstName: '', lastName: '', email: '', nickname: '' });
   const [regErr, setRegErr] = useState({});
-
+  const [pendingGoogleToken, setPendingGoogleToken] = useState(null);
 
   // Lock body scroll
   useEffect(() => {
@@ -74,10 +56,22 @@ export default function AuthModal({ onClose, onSuccess }) {
   const handleGoogleAuth = async () => {
     setLoading(true);
     try {
-      const { user } = await signInWithGoogle();
+      const response = await signInWithGoogle();
       setLoading(false);
-      setView('login-success');
-      setTimeout(() => onSuccess(user), 1500);
+      
+      if (response.isNewUser) {
+        setRegForm({
+          firstName: response.googleProfile?.first_name || '',
+          lastName: response.googleProfile?.last_name || '',
+          email: response.googleProfile?.email_address || '',
+          nickname: '',
+        });
+        setPendingGoogleToken(response.idToken);
+        setView('reg-google');
+      } else {
+        setView('login-success');
+        setTimeout(() => onSuccess(response.user), 1500);
+      }
     } catch (err) {
       console.error(err);
       setLoading(false);
@@ -90,7 +84,6 @@ export default function AuthModal({ onClose, onSuccess }) {
     }
   };
 
-  // ── Login ─────────────────────────────────────────────────────────────────
   const handleLogin = async () => {
     const e = {};
     if (!loginForm.identifier.trim()) e.identifier = 'Required';
@@ -116,26 +109,20 @@ export default function AuthModal({ onClose, onSuccess }) {
     }
   };
 
-  // ── Reg step 1 → 2 ───────────────────────────────────────────────────────
-  const handleReg1 = () => {
+  const handleGoogleCreate = async () => {
     const e = {};
     if (!regForm.firstName.trim()) e.firstName = 'First name is required';
-    if (Object.keys(e).length) { setRegErr(e); return; }
-    setRegErr({});
-    setView('reg-2');
-  };
-
-  // ── Reg submit ────────────────────────────────────────────────────────────
-  const handleRegSubmit = async () => {
-    const e = {};
-    if (!regForm.email.trim()) e.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(regForm.email)) e.email = 'Enter a valid email';
     if (Object.keys(e).length) { setRegErr(e); return; }
     setRegErr({});
     setLoading(true);
 
     try {
-      const { user } = await signUp(regForm);
+      const { user } = await createGoogleAccount({
+        id_token: pendingGoogleToken,
+        first_name: regForm.firstName,
+        last_name: regForm.lastName,
+        nick_name: regForm.nickname,
+      });
       setLoading(false);
       setView('reg-success');
       setTimeout(() => onSuccess(user), 1800);
@@ -149,9 +136,6 @@ export default function AuthModal({ onClose, onSuccess }) {
       setView('reg-fail');
     }
   };
-
-  const goReg = () => { setRegErr({}); setView('reg-1'); setShowEmail(false); };
-  const goLogin = () => { setLoginErr({}); setView('login'); setShowEmail(false); };
 
   const googleIcon = (
     <svg width="18" height="18" viewBox="0 0 24 24" style={{ marginRight: '8px' }}>
@@ -177,8 +161,8 @@ export default function AuthModal({ onClose, onSuccess }) {
         {view === 'login' && (
           <div className="am-view" key="login">
             <div className="am-logo">HIT<em>IT</em></div>
-            <h2 className="am-title">Sign In</h2>
-            <p className="am-sub">Good to have you back.</p>
+            <h2 className="am-title">Sign In / Register</h2>
+            <p className="am-sub">Experience the simplest way to hit it.</p>
             
             {!showEmail ? (
               <div style={{ display: 'flex', flexDirection: 'column', width: '100%', alignItems: 'center', marginTop: '1rem' }}>
@@ -191,7 +175,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                   {loading ? <span className="am-spin" /> : <>{googleIcon} Continue with Google</>}
                 </button>
                 <div className="am-divider" style={{ margin: '1rem 0', width: '100%' }}><span>or</span></div>
-                <button className="am-btn am-btn--ghost" onClick={() => setShowEmail(true)}>Use Email / Password</button>
+                <button className="am-btn am-btn--ghost" onClick={() => setShowEmail(true)}>Use Password</button>
               </div>
             ) : (
               <>
@@ -206,9 +190,6 @@ export default function AuthModal({ onClose, onSuccess }) {
                 </button>
               </>
             )}
-            
-            <div className="am-divider" style={{ marginTop: '1.5rem' }}><span>or</span></div>
-            <button className="am-btn am-btn--ghost" onClick={goReg}>Create an Account</button>
           </div>
         )}
 
@@ -217,8 +198,7 @@ export default function AuthModal({ onClose, onSuccess }) {
           <div className="am-view am-view--status" key="login-fail">
             <div className="am-status-icon am-status-icon--fail">✕</div>
             <h2 className="am-title">Login Failed</h2>
-            <p className="am-sub">{loginErr.server || "We couldn't verify your credentials."}<br />Want to create a new account instead?</p>
-            <button className="am-btn am-btn--primary" onClick={goReg}>Register Now →</button>
+            <p className="am-sub">{loginErr.server || "We couldn't verify your credentials."}</p>
             <button className="am-btn am-btn--ghost" onClick={() => setView('login')}>← Try Again</button>
           </div>
         )}
@@ -233,63 +213,27 @@ export default function AuthModal({ onClose, onSuccess }) {
           </div>
         )}
 
-        {/* ── REG STEP 1 ─────────────────────────────────────────────────── */}
-        {view === 'reg-1' && (
-          <div className="am-view" key="reg-1">
+        {/* ── COMPLETE GOOGLE PROFILE ────────────────────────────────────── */}
+        {view === 'reg-google' && (
+          <div className="am-view" key="reg-google">
             <div className="am-logo">HIT<em>IT</em></div>
-            {!showEmail ? (
-              <>
-                <h2 className="am-title">Create Account</h2>
-                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', alignItems: 'center', marginTop: '1rem' }}>
-                  <button 
-                    className="am-btn am-btn--primary" 
-                    onClick={handleGoogleAuth} 
-                    disabled={loading}
-                    style={{ background: '#fff', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    {loading ? <span className="am-spin" /> : <>{googleIcon} Continue with Google</>}
-                  </button>
-                  <div className="am-divider" style={{ margin: '1rem 0', width: '100%' }}><span>or</span></div>
-                  <button className="am-btn am-btn--ghost" onClick={() => setShowEmail(true)}>Sign up with Email</button>
-                  <div className="am-divider" style={{ marginTop: '1.5rem', width: '100%' }}></div>
-                  <button className="am-btn am-btn--ghost" onClick={goLogin}>← Back to Login</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <Stepper step={0} />
-                <h2 className="am-title">About You</h2>
-                <div className="am-row">
-                  <Field label="First Name" required placeholder="Alex"
-                    value={regForm.firstName} onChange={(v) => setRegForm({ ...regForm, firstName: v })}
-                    error={regErr.firstName} autoFocus />
-                  <Field label="Last Name" optional placeholder="Johnson"
-                    value={regForm.lastName} onChange={(v) => setRegForm({ ...regForm, lastName: v })} />
-                </div>
-                <Field label="Nickname" optional placeholder="Your handle, e.g. 'ace'"
-                  value={regForm.nickname} onChange={(v) => setRegForm({ ...regForm, nickname: v })} />
-                <button className="am-btn am-btn--primary" onClick={handleReg1}>Next →</button>
-                <button className="am-btn am-btn--ghost" onClick={goLogin}>← Back to Login</button>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ── REG STEP 2 ─────────────────────────────────────────────────── */}
-        {view === 'reg-2' && (
-          <div className="am-view" key="reg-2">
-            <div className="am-logo">HIT<em>IT</em></div>
-            <Stepper step={1} />
-            <h2 className="am-title">Contact</h2>
-            <Field label="Email Address" required type="email" placeholder="you@example.com"
-              value={regForm.email} onChange={(v) => setRegForm({ ...regForm, email: v })}
-              error={regErr.email} autoFocus />
-            <Field label="Phone Number" optional type="tel" placeholder="+91 98765 43210"
-              value={regForm.phone} onChange={(v) => setRegForm({ ...regForm, phone: v })} />
-            <button className="am-btn am-btn--primary" onClick={handleRegSubmit} disabled={loading}>
+            <h2 className="am-title">Complete Profile</h2>
+            <p className="am-sub">Just a few details to finish setting up.</p>
+            <div className="am-row">
+              <Field label="First Name" required placeholder="Alex"
+                value={regForm.firstName} onChange={(v) => setRegForm({ ...regForm, firstName: v })}
+                error={regErr.firstName} autoFocus />
+              <Field label="Last Name" optional placeholder="Johnson"
+                value={regForm.lastName} onChange={(v) => setRegForm({ ...regForm, lastName: v })} />
+            </div>
+            <Field label="Nickname" optional placeholder="Your handle, e.g. 'ace'"
+              value={regForm.nickname} onChange={(v) => setRegForm({ ...regForm, nickname: v })} />
+            <Field label="Google Email" disabled={true}
+              value={regForm.email} onChange={() => {}} />
+            <button className="am-btn am-btn--primary" onClick={handleGoogleCreate} disabled={loading} style={{ marginTop: '1rem' }}>
               {loading ? <span className="am-spin" /> : 'Create Account'}
             </button>
-            <button className="am-btn am-btn--ghost" onClick={() => setView('reg-1')}>← Back</button>
+            <button className="am-btn am-btn--ghost" onClick={() => setView('login')}>← Cancel</button>
           </div>
         )}
 
@@ -312,7 +256,7 @@ export default function AuthModal({ onClose, onSuccess }) {
             <div className="am-status-icon am-status-icon--fail">✕</div>
             <h2 className="am-title">Registration Failed</h2>
             <p className="am-sub">{regErr.server || 'Something went wrong. Please try again.'}</p>
-            <button className="am-btn am-btn--primary" onClick={() => setView('reg-2')}>Try Again</button>
+            <button className="am-btn am-btn--primary" onClick={() => setView('reg-google')}>Try Again</button>
             <button className="am-btn am-btn--ghost" onClick={() => setView('login')}>Back to Login</button>
           </div>
         )}

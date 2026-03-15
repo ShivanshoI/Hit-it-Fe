@@ -126,9 +126,13 @@ export default function ProfilePage({ user, onLogout }) {
           <div className="pp-banner-content">
             <div className="pp-avatar-wrapper">
               <div className="pp-avatar-ring"></div>
-              <div className="pp-avatar">
-                {((displayName || user?.name || 'U')[0]).toUpperCase()}
-              </div>
+              {user?.avatar ? (
+                <img src={user.avatar} alt={user?.name} className="pp-avatar pp-avatar--img" style={{ objectFit: 'cover' }} />
+              ) : (
+                <div className="pp-avatar">
+                  {((displayName || user?.name || 'U')[0]).toUpperCase()}
+                </div>
+              )}
               <div className="pp-status-dot"></div>
             </div>
             

@@ -126,7 +126,7 @@ export default function LoginPage() {
               className="login-btn secondary"
               onClick={() => setShowEmail(true)}
             >
-              Use Email / Password (Backup)
+              Use Password
             </button>
           ) : (
             <>

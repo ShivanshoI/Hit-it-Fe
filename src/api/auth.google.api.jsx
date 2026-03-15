@@ -20,9 +20,37 @@ export async function signInWithGoogle() {
     body: JSON.stringify({ id_token: idToken }),
   });
 
+  if (body.data.is_new_user) {
+    return {
+      isNewUser: true,
+      googleProfile: body.data.google_profile,
+      idToken,
+    };
+  }
+
   const { user: rawUser, token } = body.data;
   
   // Persist token so every subsequent apiClient({ auth: true }) call is authenticated
+  tokenStore.set(token);
+
+  return {
+    user: normaliseUser(rawUser),
+    token,
+  };
+}
+
+/**
+ * createGoogleAccount()
+ *
+ * Finalizes Google signup by providing user details.
+ */
+export async function createGoogleAccount(payload) {
+  const body = await apiClient('/api/auth/google/create', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+  const { user: rawUser, token } = body.data;
   tokenStore.set(token);
 
   return {

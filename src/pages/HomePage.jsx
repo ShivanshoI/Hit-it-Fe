@@ -275,10 +275,10 @@ const NAV_ITEMS = [
     id: 'history', label: 'History',
     icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6" /><path d="M8 4v4l2.5 2.5" /></svg>,
   },
-  {
-    id: 'envs', label: 'Environments',
-    icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="8" cy="8" r="6" /><path d="M8 2a9 9 0 010 12M2 8h12" /></svg>,
-  },
+  // {
+  //   id: 'envs', label: 'Environments',
+  //   icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="8" cy="8" r="6" /><path d="M8 2a9 9 0 010 12M2 8h12" /></svg>,
+  // },
   {
     id: 'team', label: 'Team',
     icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="6" cy="6" r="2.5" /><path d="M1 13c0-2.5 2-4 5-4s5 1.5 5 4" /><circle cx="12" cy="5" r="2" /><path d="M14.5 12c0-1.8-1-3-2.5-3" /></svg>,
@@ -390,7 +390,11 @@ function Sidebar({ user, onLogout, active, setActive, onQuicky,
 
       <div className="hp-sidebar-bottom">
         <div className="hp-sidebar-user" onClick={() => setActive('profile')} style={{ cursor: 'pointer' }} title="View Profile">
-          <div className="hp-avatar">{(user?.name || 'U')[0].toUpperCase()}</div>
+          {user?.avatar ? (
+            <img src={user.avatar} alt={user?.name} className="hp-avatar" style={{ objectFit: 'cover', padding: 0 }} />
+          ) : (
+            <div className="hp-avatar">{(user?.name || 'U')[0].toUpperCase()}</div>
+          )}
           <div className="hp-user-info">
             <span className="hp-user-name">{user?.name || 'User'}</span>
             <span className="hp-user-email">{user?.email || ''}</span>

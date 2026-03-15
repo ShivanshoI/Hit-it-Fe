@@ -140,6 +140,7 @@ export function normaliseUser(raw) {
     nickName:       raw.nick_name,
     name:           [raw.first_name, raw.last_name].filter(Boolean).join(' '),
     email:          raw.email_address,
+    avatar:         raw.avatar_url,
     phoneNumber:    raw.phone_number,
     organizationId: raw.organizationId, // Preserving the ID for verification
     hasPassword:    raw.has_password,
