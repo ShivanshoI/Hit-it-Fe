@@ -57,6 +57,12 @@ export default function AuthModal({ onClose, onSuccess }) {
     setLoading(true);
     try {
       const response = await signInWithGoogle();
+      
+      if (!response) {
+        setLoading(false);
+        return; // User cancelled or harmless error
+      }
+
       setLoading(false);
       
       if (response.isNewUser) {

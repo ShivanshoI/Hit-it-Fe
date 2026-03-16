@@ -38,7 +38,11 @@ export default function RegisterPage() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      await signInWithGoogle();
+      const response = await signInWithGoogle();
+      if (!response) {
+        setLoading(false);
+        return; // User cancelled or harmless error
+      }
       setLoading(false);
       navigate('/home');
     } catch (err) {

@@ -51,7 +51,11 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      await signInWithGoogle();
+      const response = await signInWithGoogle();
+      if (!response) {
+        setLoading(false);
+        return; // User cancelled or harmless error
+      }
       setLoading(false);
       setModal('success');
     } catch (err) {

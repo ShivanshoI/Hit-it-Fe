@@ -2,7 +2,7 @@
 // Central setup for all HTTP calls to the backend.
 // Every feature-specific api file imports `apiClient` from here.
 
-const BASE_URL = 'https://hitit-backend-199827594435.asia-south1.run.app';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 // ─── Token helpers ────────────────────────────────────────────────────────────
 // Stored once after sign-in; attached automatically to every authenticated call.

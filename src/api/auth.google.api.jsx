@@ -12,7 +12,16 @@ import { normaliseUser } from './auth.api';
  * @returns {Promise<{ user: NormalisedUser, token: string }>}
  */
 export async function signInWithGoogle() {
-  const result = await signInWithPopup(auth, googleProvider);
+  let result;
+  try {
+    result = await signInWithPopup(auth, googleProvider);
+  } catch (err) {
+    if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
+      return null; // Return null to indicate the user cancelled or another popup was requested
+    }
+    throw err;
+  }
+
   const idToken = await result.user.getIdToken();
 
   const body = await apiClient('/api/auth/google', {
