@@ -1,26 +1,16 @@
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import { apiClient, tokenStore } from '../api';
 import { normaliseUser } from './auth.api';
 
 /**
- * signInWithGoogle()
- *
- * Opens a Google login popup, gets the Firebase ID token,
- * and sends it to our backend to retrieve the native app JWT.
+ * handleGoogleAuthResult(result)
  * 
- * @returns {Promise<{ user: NormalisedUser, token: string }>}
+ * Takes a Firebase Auth result (from popup or redirect)
+ * and performs the backend handshake.
  */
-export async function signInWithGoogle() {
-  let result;
-  try {
-    result = await signInWithPopup(auth, googleProvider);
-  } catch (err) {
-    if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
-      return null; // Return null to indicate the user cancelled or another popup was requested
-    }
-    throw err;
-  }
+async function handleGoogleAuthResult(result) {
+  if (!result?.user) return null;
 
   const idToken = await result.user.getIdToken();
 
@@ -38,14 +28,52 @@ export async function signInWithGoogle() {
   }
 
   const { user: rawUser, token } = body.data;
-  
-  // Persist token so every subsequent apiClient({ auth: true }) call is authenticated
   tokenStore.set(token);
 
   return {
     user: normaliseUser(rawUser),
     token,
   };
+}
+
+/**
+ * signInWithGoogle()
+ *
+ * Chooses between Popup and Redirect based on browser restrictions.
+ */
+export async function signInWithGoogle() {
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    return await handleGoogleAuthResult(result);
+  } catch (err) {
+    if (
+      err.code === 'auth/cancelled-popup-request' ||
+      err.code === 'auth/popup-closed-by-user'
+    ) {
+      return null; // User cancelled, no action needed
+    }
+    if (err.code === 'auth/popup-blocked') {
+      // Browser blocked popup → fall back to redirect silently
+      await signInWithRedirect(auth, googleProvider);
+      return { type: 'redirecting' };
+    }
+    throw err; // Any other error, bubble up
+  }
+}
+
+/**
+ * getGoogleRedirectResult()
+ * 
+ * Checks if the user just returned from a Google redirect and processes it.
+ */
+export async function getGoogleRedirectResult() {
+  try {
+    const result = await getRedirectResult(auth);
+    return await handleGoogleAuthResult(result);
+  } catch (err) {
+    console.error("Redirect auth error:", err);
+    throw err;
+  }
 }
 
 /**

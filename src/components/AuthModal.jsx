@@ -28,7 +28,7 @@ function Field({ label, required, optional, type = 'text', placeholder, value, o
 }
 
 // ─── Main Modal ───────────────────────────────────────────────────────────────
-export default function AuthModal({ onClose, onSuccess }) {
+export default function AuthModal({ onClose, onSuccess, initialRedirectData }) {
   const [view, setView] = useState('login');
   const [loading, setLoading] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
@@ -53,6 +53,20 @@ export default function AuthModal({ onClose, onSuccess }) {
     return () => window.removeEventListener('keydown', h);
   }, [onClose]);
 
+  // Handle Initial Redirect Data (if user was redirected back)
+  useEffect(() => {
+    if (initialRedirectData?.isNewUser) {
+      setRegForm({
+        firstName: initialRedirectData.googleProfile?.first_name || '',
+        lastName: initialRedirectData.googleProfile?.last_name || '',
+        email: initialRedirectData.googleProfile?.email_address || '',
+        nickname: '',
+      });
+      setPendingGoogleToken(initialRedirectData.idToken);
+      setView('reg-google');
+    }
+  }, [initialRedirectData]);
+
   const handleGoogleAuth = async () => {
     setLoading(true);
     try {
@@ -61,6 +75,11 @@ export default function AuthModal({ onClose, onSuccess }) {
       if (!response) {
         setLoading(false);
         return; // User cancelled or harmless error
+      }
+
+      if (response.type === 'redirecting') {
+        // No need to stop loading, browser is navigating away
+        return;
       }
 
       setLoading(false);

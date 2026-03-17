@@ -3,6 +3,7 @@ import { signOut, getMe } from './api/auth.api';
 import LandingPage from './pages/LandingPage';
 import HomePage from './pages/HomePage';
 import AuthModal from './components/AuthModal';
+import { getGoogleRedirectResult } from './api/auth.google.api';
 
 import { TeamProvider, useTeam } from './context/TeamContext';
 import { NotificationProvider } from './context/NotificationContext';
@@ -27,6 +28,7 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [pendingRedirectAuth, setPendingRedirectAuth] = useState(null);
 
   const handleModalClose = () => {
     setModalOpen(false);
@@ -35,6 +37,22 @@ export default function App() {
   useEffect(() => {
     const initializeUser = async () => {
       try {
+        // 1. Check if we just returned from a Google Redirect
+        const redirectResponse = await getGoogleRedirectResult();
+        if (redirectResponse) {
+          if (redirectResponse.isNewUser) {
+            setPendingRedirectAuth(redirectResponse);
+            setModalOpen(true);
+            setIsInitializing(false);
+            return;
+          } else {
+            handleLoginSuccess(redirectResponse.user);
+            setIsInitializing(false);
+            return;
+          }
+        }
+
+        // 2. Otherwise try local token session
         const data = await getMe();
         if (data?.user) {
           setUser(data.user);
@@ -43,7 +61,6 @@ export default function App() {
           signOut();
         }
       } catch (err) {
-        // Token invalid or network error
         signOut();
       } finally {
         setIsInitializing(false);
@@ -57,6 +74,7 @@ export default function App() {
     setUser(userData);
     setIsLoggedIn(true);
     setModalOpen(false);
+    setPendingRedirectAuth(null);
   };
 
   if (isInitializing) {
@@ -84,6 +102,7 @@ export default function App() {
             <AuthModal
               onClose={handleModalClose}
               onSuccess={handleLoginSuccess}
+              initialRedirectData={pendingRedirectAuth}
             />
           )}
         </div>
