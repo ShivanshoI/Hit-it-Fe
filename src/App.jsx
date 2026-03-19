@@ -4,6 +4,7 @@ import LandingPage from './pages/LandingPage';
 import HomePage from './pages/HomePage';
 import AuthModal from './components/AuthModal';
 import { getGoogleRedirectResult } from './api/auth.google.api';
+import BirdLoader from './components/BirdLoader';
 
 import { TeamProvider, useTeam } from './context/TeamContext';
 import { NotificationProvider } from './context/NotificationContext';
@@ -78,11 +79,7 @@ export default function App() {
   };
 
   if (isInitializing) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0a0a0b', color: '#fff' }}>
-        Loading...
-      </div>
-    );
+    return <BirdLoader />;
   }
 
   return (
