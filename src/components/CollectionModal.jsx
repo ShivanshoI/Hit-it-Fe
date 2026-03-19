@@ -1268,6 +1268,30 @@ export default function CollectionModal({ collection, onClose, recentCollections
   const [globalOverrides, setGlobalOverrides] = useState({});
   const globals = globalVars; // Keep backward compat for the auth hint section
 
+  // ── Environment selector ──────────────────────────────────────────────────────
+  const ENVS = [
+    { id: 'dev',     label: 'Dev',     color: '#10b981' },
+    { id: 'staging', label: 'Staging', color: '#f59e0b' },
+    { id: 'prod',    label: 'Prod',    color: '#ef4444' },
+  ];
+  const ENV_STORAGE_KEY = `hitit_active_env_${collection?.id || 'global'}`;
+  const [activeEnv, setActiveEnv] = useState(() => {
+    try { return localStorage.getItem(ENV_STORAGE_KEY) || 'dev'; } catch { return 'dev'; }
+  });
+  const changeEnv = (envId) => {
+    setActiveEnv(envId);
+    try { localStorage.setItem(ENV_STORAGE_KEY, envId); } catch {}
+  };
+  const activeEnvData = ENVS.find(e => e.id === activeEnv) || ENVS[0];
+  const [envMenuOpen, setEnvMenuOpen] = useState(false);
+  // Close env menu on outside click
+  useEffect(() => {
+    if (!envMenuOpen) return;
+    const h = (e) => setEnvMenuOpen(false);
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [envMenuOpen]);
+
   // Fetch global variables and collection overrides for suggestions
   useEffect(() => {
     const loadGlobals = async () => {
@@ -1469,18 +1493,24 @@ export default function CollectionModal({ collection, onClose, recentCollections
     return [...seen.entries()].map(([k, v]) => ({ k, v })).filter(s => !kvState.params.some(p => p.k === s.k));
   }, [shadowHistory, kvState.params]);
 
-  // ── Global Variable Suggestions (golden picker) ──────────────────────────────
+  // ── Global Variable Suggestions (golden picker) — env-aware ─────────────────
+  const resolveGlobalVal = useCallback((v) => {
+    // Overrides first, then global values, for the active environment
+    const override = globalOverrides?.[v.key]?.[activeEnv];
+    return override || v.values?.[activeEnv] || v.values?.dev || '';
+  }, [globalOverrides, activeEnv]);
+
   const globalHeaderSuggestions = useMemo(() => {
     return globalVars
-      .map(v => ({ k: v.key, v: v.values?.dev || '' }))
-      .filter(s => !kvState.headers.some(h => h.k === s.k)); // Dedup: hide keys already in use
-  }, [globalVars, kvState.headers]);
+      .map(v => ({ k: v.key, v: resolveGlobalVal(v) }))
+      .filter(s => !kvState.headers.some(h => h.k === s.k));
+  }, [globalVars, kvState.headers, resolveGlobalVal]);
 
   const globalParamSuggestions = useMemo(() => {
     return globalVars
-      .map(v => ({ k: v.key, v: v.values?.dev || '' }))
-      .filter(s => !kvState.params.some(p => p.k === s.k)); // Dedup: hide keys already in use
-  }, [globalVars, kvState.params]);
+      .map(v => ({ k: v.key, v: resolveGlobalVal(v) }))
+      .filter(s => !kvState.params.some(p => p.k === s.k));
+  }, [globalVars, kvState.params, resolveGlobalVal]);
 
   const updateHeader = (i, val) => setKvState(prev => ({ ...prev, headers: prev.headers.map((h,j)=>j===i?val:h) }));
   const deleteHeader = (i)      => setKvState(prev => ({ ...prev, headers: prev.headers.filter((_,j)=>j!==i) }));
@@ -1594,21 +1624,18 @@ export default function CollectionModal({ collection, onClose, recentCollections
     }
   };
 
-  // ── Variable substitution engine ──────────────────────────────────────────────
-  // Replaces {{key}} with the resolved value at send time.
-  // Priority: Collection Override > Global Default
+  // ── Variable substitution engine ── env-aware ─────────────────────────────────
+  // Priority: Collection Override (active env) > Global Default (active env) > Global Default (dev)
   const resolveVariables = useCallback((text) => {
     if (!text || typeof text !== 'string') return text;
     return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-      // Check collection override first
-      const overrideVal = globalOverrides?.[key]?.dev; // TODO: use activeEnv when environments are wired
+      const overrideVal = globalOverrides?.[key]?.[activeEnv];
       if (overrideVal) return overrideVal;
-      // Fallback to global default
       const globalVar = globalVars.find(v => v.key === key);
-      if (globalVar) return globalVar.values?.dev || match; // TODO: use activeEnv
-      return match; // Leave as-is if no match
+      if (globalVar) return globalVar.values?.[activeEnv] || globalVar.values?.dev || match;
+      return match;
     });
-  }, [globalVars, globalOverrides]);
+  }, [globalVars, globalOverrides, activeEnv]);
 
   const handleSend = async () => {
     setLoading(true); setResponse('');
@@ -1913,11 +1940,17 @@ export default function CollectionModal({ collection, onClose, recentCollections
           </div>
           <div className="cm-modal-header-right">
 
-            <button className="cm-icon-btn-label" onClick={()=>setGlobalStoreOpen(true)}>
+            <button className="cm-icon-btn-label" onClick={()=>setGlobalStoreOpen(true)} title={`Globals — ${activeEnvData.label} environment active`}>
               <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
                 <circle cx="6.5" cy="6.5" r="5.5"/><path d="M6.5 1a9 9 0 010 11M1 6.5h11"/>
               </svg>
               Globals
+              {/* Active env indicator dot */}
+              <span
+                className="cm-env-dot"
+                style={{ background: activeEnvData.color, marginLeft: '1px' }}
+                title={`Active env: ${activeEnvData.label}`}
+              />
             </button>
             {/* ── Share ── */}
             <div className="cm-share-anchor">
@@ -2426,6 +2459,8 @@ export default function CollectionModal({ collection, onClose, recentCollections
         collectionId={collection?.id}
         collectionName={collection?.name}
         onClose={() => setGlobalStoreOpen(false)}
+        activeEnv={activeEnv}
+        onChangeEnv={changeEnv}
       />
     )}
 

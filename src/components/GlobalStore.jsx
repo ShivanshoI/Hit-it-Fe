@@ -39,12 +39,18 @@ function Tag({ label, onRemove }) {
 }
 
 // ─── Variable row ─────────────────────────────────────────────────────────────
-function VarRow({ variable, envs, categories, activeEnv, collectionId, overrides, onUpdate, onUpdateOverride, onDelete, revealed, onToggleReveal }) {
-  const [expanded, setExpanded] = useState(false);
+function VarRow({ variable, envs, categories, activeEnv, collectionId, collectionName, overrides, onUpdate, onUpdateOverride, onDelete, revealed, onToggleReveal, expanded, onToggleExpand }) {
   const [tagDraft, setTagDraft] = useState('');
+  // Local description state to avoid calling onUpdate (API) on every keystroke
+  const [desc, setDesc] = useState(variable.description || '');
+  // Sync if parent variable changes (e.g. after initial load)
+  useEffect(() => { setDesc(variable.description || ''); }, [variable.id]);
+  const saveDesc = () => {
+    if (desc !== variable.description) onUpdate({ ...variable, description: desc });
+  };
   const cat = categories.find(c => c.id === variable.category);
   const override = overrides?.[variable.key];
-  const effectiveVal = (override?.[activeEnv] || variable.values[activeEnv] || '');
+  const effectiveVal = (override?.[activeEnv] || variable.values?.[activeEnv] || '');
   const isOverridden = override && !!override[activeEnv];
 
   const updateValue = (env, val) => {
@@ -52,7 +58,7 @@ function VarRow({ variable, envs, categories, activeEnv, collectionId, overrides
       // If we are in a collection, update the override instead of the global default
       onUpdateOverride(variable.key, env, val);
     } else {
-      onUpdate({ ...variable, values: { ...variable.values, [env]: val } });
+      onUpdate({ ...variable, values: { ...(variable.values || {}), [env]: val } });
     }
   };
   const addTag = () => {
@@ -65,13 +71,13 @@ function VarRow({ variable, envs, categories, activeEnv, collectionId, overrides
   return (
     <div className={`gs-var-row ${expanded ? 'gs-var-row--expanded' : ''}`}>
       {/* Summary line */}
-      <div className="gs-var-summary" onClick={() => setExpanded(!expanded)}>
+      <div className="gs-var-summary" onClick={() => onToggleExpand()}>
         <div className="gs-var-left">
           <span className="gs-chevron">{expanded ? '▾' : '▸'}</span>
           {cat && <EnvDot color={cat.color} size={7} />}
           <span className="gs-var-key">{'{{' + variable.key + '}}'}</span>
           {variable.secret && <span className="gs-secret-badge">secret</span>}
-          {isOverridden && <span className="gs-override-badge" title={`Overridden for ${collectionName}`}>override</span>}
+          {isOverridden && <span className="gs-override-badge" title={`Collection-specific value active for ${collectionName}`}>collection value</span>}
         </div>
         <div className="gs-var-right">
           <span className="gs-var-preview">
@@ -102,8 +108,10 @@ function VarRow({ variable, envs, categories, activeEnv, collectionId, overrides
             <span className="gs-detail-label">Description</span>
             <input
               className="gs-detail-input"
-              value={variable.description}
-              onChange={e => onUpdate({ ...variable, description: e.target.value })}
+              value={desc}
+              onChange={e => setDesc(e.target.value)}
+              onBlur={saveDesc}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveDesc(); } }}
               placeholder="What does this variable do?"
             />
           </div>
@@ -117,7 +125,7 @@ function VarRow({ variable, envs, categories, activeEnv, collectionId, overrides
                   key={c.id}
                   className={`gs-cat-pill ${variable.category === c.id ? 'active' : ''}`}
                   style={{ '--cat-color': c.color }}
-                  onClick={() => onUpdate({ ...variable, category: c.id })}
+                  onClick={(e) => { e.stopPropagation(); onUpdate({ ...variable, category: c.id }); }}
                 >
                   <EnvDot color={c.color} size={6} />
                   {c.label}
@@ -158,7 +166,7 @@ function VarRow({ variable, envs, categories, activeEnv, collectionId, overrides
           <div className="gs-env-grid-label">Values per environment</div>
           <div className="gs-env-grid">
             {envs.map(env => {
-              const ovVal = COLLECTION_OVERRIDES[collectionName]?.[variable.key]?.[env.id];
+              const ovVal = override?.[env.id];
               return (
                 <div key={env.id} className={`gs-env-cell ${activeEnv === env.id ? 'active' : ''}`}>
                   <div className="gs-env-cell-head">
@@ -170,13 +178,13 @@ function VarRow({ variable, envs, categories, activeEnv, collectionId, overrides
                     <input
                       className={`gs-env-input ${variable.secret && !revealed ? 'masked' : ''}`}
                       type={variable.secret && !revealed ? 'password' : 'text'}
-                      value={(override?.[env.id] || variable.values[env.id] || '')}
+                      value={(override?.[env.id] || variable.values?.[env.id] || '')}
                       onChange={e => updateValue(env.id, e.target.value)}
                       placeholder="— not set —"
                     />
                     {isOverridden && (
-                      <div className="gs-env-override-val" title="Using collection-specific value">
-                        <span className="gs-override-badge">override active</span>
+                      <div className="gs-env-override-val" title="Using collection-specific value for this environment">
+                        <span className="gs-override-badge">collection value</span>
                       </div>
                     )}
                   </div>
@@ -282,17 +290,26 @@ function AddVarForm({ envs, categories, onAdd, onClose }) {
 }
 
 // ─── Main Global Store Panel ───────────────────────────────────────────────────
-export default function GlobalStore({ collectionId, collectionName, onClose }) {
+export default function GlobalStore({ collectionId, collectionName, onClose, activeEnv: activeEnvProp, onChangeEnv }) {
   const [vars, setVars]               = useState([]);
   const [overrides, setOverrides]     = useState({});
   const [loading, setLoading]         = useState(true);
   const [envs]                        = useState(INITIAL_ENVS);
   const [categories, setCategories]   = useState(INITIAL_CATEGORIES);
-  const [activeEnv, setActiveEnv]     = useState('dev');
+  // Use lifted state if provided (from CollectionModal), otherwise own internal state
+  const [activeEnvInternal, setActiveEnvInternal] = useState('dev');
+  const activeEnv    = activeEnvProp    !== undefined ? activeEnvProp    : activeEnvInternal;
+  const setActiveEnv = onChangeEnv      !== undefined ? onChangeEnv      : setActiveEnvInternal;
   const [search, setSearch]           = useState('');
   const [filterCat, setFilterCat]     = useState('all');
   const [filterTag, setFilterTag]     = useState('');
   const [revealed, setRevealed]       = useState({});
+  const [expandedVars, setExpandedVars] = useState(new Set());
+  const toggleExpanded = (id) => setExpandedVars(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
   const [showAdd, setShowAdd]         = useState(false);
   const [newCatDraft, setNewCatDraft] = useState('');
   const [showCatEdit, setShowCatEdit] = useState(false);
@@ -570,12 +587,15 @@ export default function GlobalStore({ collectionId, collectionName, onClose }) {
                       categories={categories}
                       activeEnv={activeEnv}
                       collectionId={collectionId}
+                      collectionName={collectionName}
                       overrides={overrides}
                       onUpdate={updated => updateVar(v.id, updated)}
                       onUpdateOverride={updateOverride}
                       onDelete={() => deleteVar(v.id)}
                       revealed={!!revealed[v.id]}
                       onToggleReveal={() => toggleReveal(v.id)}
+                      expanded={expandedVars.has(v.id)}
+                      onToggleExpand={() => toggleExpanded(v.id)}
                     />
                   ))}
                 </div>
