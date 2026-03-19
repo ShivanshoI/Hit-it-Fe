@@ -1297,6 +1297,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
   const [showCurlModal, setShowCurlModal]     = useState(false);
   const [generatedCurl, setGeneratedCurl]     = useState('');
   const [showReadOnlyToast, setShowReadOnlyToast] = useState(false);
+  const [curlBaseCopied, setCurlBaseCopied]   = useState(false);
 
   // ── Resizable panels (session-only) ──────────────────────────────────────────
   const CURL_MIN = 150; const CURL_MAX = 420;
@@ -2039,17 +2040,39 @@ export default function CollectionModal({ collection, onClose, recentCollections
                   placeholder="https://api.example.com/endpoint or paste 'curl ...'"
                 />
                 <button 
-                  className="cm-icon-btn" 
-                  title="View & Edit as cURL"
-                  onClick={() => {
-                    setGeneratedCurl(generateCurlCommand(method, url, kvState.headers, kvState.auth, kvState.token, kvState.body, kvState.params));
-                    setShowCurlModal(true);
+                  className={`cm-icon-btn ${curlBaseCopied ? 'active' : ''}`}
+                  title={curlBaseCopied ? "Copied!" : "View & Edit as cURL (Double-click to copy)"}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (window.curlClickTimeout) {
+                      // It's a double click - clear timeout and run copy logic
+                      clearTimeout(window.curlClickTimeout);
+                      window.curlClickTimeout = null;
+                      setShowCurlModal(false); // ensure modal is closed
+                      const cmd = generateCurlCommand(method, url, kvState.headers, kvState.auth, kvState.token, kvState.body, kvState.params);
+                      navigator.clipboard.writeText(cmd).catch(() => {});
+                      setCurlBaseCopied(true);
+                      setTimeout(() => setCurlBaseCopied(false), 450);
+                    } else {
+                      // First click - wait to see if it becomes a double click
+                      window.curlClickTimeout = setTimeout(() => {
+                        window.curlClickTimeout = null;
+                        // Single click action (open modal)
+                        setGeneratedCurl(generateCurlCommand(method, url, kvState.headers, kvState.auth, kvState.token, kvState.body, kvState.params));
+                        setShowCurlModal(true);
+                      }, 250);
+                    }
                   }}
-                  style={{ position: 'absolute', right: '0.4rem', width: '26px', height: '26px', color: 'var(--text-dim)' }}
+                  style={{ position: 'absolute', right: '0.4rem', width: 'auto', minWidth: '26px', height: '26px', padding: curlBaseCopied ? '0 8px' : '0', color: curlBaseCopied ? 'var(--purple)' : 'var(--text-dim)', fontSize: '11px', fontWeight: 600 }}
                 >
-                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M5 11L2 8l3-3M11 11l3-3-3-3M9 2.5l-2 11"/>
-                  </svg>
+                  {curlBaseCopied ? (
+                     "Copied!"
+                  ) : (
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 11L2 8l3-3M11 11l3-3-3-3M9 2.5l-2 11"/>
+                    </svg>
+                  )}
                 </button>
               </div>
               <button className="cm-send-btn" onClick={handleSend} disabled={loading} style={{ flexShrink: 0 }}>
