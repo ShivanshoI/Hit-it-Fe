@@ -256,7 +256,7 @@ function KVRow({ row, sharedSuggestions, globalSuggestions, onChange, onDelete, 
 }
 
 // ─── Curl Panel (left sidebar in modal) ──────────────────────────────────────
-function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename, open, favCurls, onToggleFav, fetchingSummaries }) {
+function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename, open, favCurls, onToggleFav, fetchingSummaries, panelWidth }) {
   const [globalsOpen, setGlobalsOpen] = useState(false);
   const [editingId, setEditingId]     = useState(null);
   const [draftName, setDraftName]     = useState('');
@@ -330,7 +330,10 @@ function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename
   };
 
   return (
-    <div className={`cm-curl-panel${open?' cm-curl-panel--open':''}`}>
+    <div
+      className={`cm-curl-panel${open?' cm-curl-panel--open':''}`}
+      style={open && panelWidth ? { width: panelWidth } : undefined}
+    >
 
       {/* Request list */}
       <div className="cm-curl-panel-head">
@@ -371,7 +374,7 @@ function CurlPanel({ curls, activeCurl, shadowHistory, onSelect, onAdd, onRename
 }
 
 // ─── Activity Feed Panel (Collection Mission Control) ─────────────────────────
-function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
+function ActivityFeedPanel({ open, onClose, collectionId, currentUser, panelWidth }) {
   const { teamId, orgId } = useTeam();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -564,7 +567,10 @@ function ActivityFeedPanel({ open, onClose, collectionId, currentUser }) {
   };
 
   return (
-    <div className={`cm-comments-panel${open?' cm-comments-panel--open':''}`}>
+    <div
+      className={`cm-comments-panel${open?' cm-comments-panel--open':''}`}
+      style={open && panelWidth ? { width: panelWidth } : undefined}
+    >
       <div className="cm-comments-head">
         <span>Activity Feed</span>
         <div style={{display:'flex',gap:'0.4rem',alignItems:'center'}}>
@@ -1292,6 +1298,79 @@ export default function CollectionModal({ collection, onClose, recentCollections
   const [generatedCurl, setGeneratedCurl]     = useState('');
   const [showReadOnlyToast, setShowReadOnlyToast] = useState(false);
 
+  // ── Resizable panels (session-only) ──────────────────────────────────────────
+  const CURL_MIN = 150; const CURL_MAX = 420;
+  const ACT_MIN  = 180; const ACT_MAX  = 420;
+  const TAB_MIN  = 60;  const TAB_MAX  = 380;
+  const [curlWidth, setCurlWidth]           = useState(220);
+  const [activityWidth, setActivityWidth]   = useState(260);
+  const [tabContentHeight, setTabContentHeight] = useState(190);
+
+  // Resize handler factory — creates a mousedown handler that tracks drag delta
+  const onCurlResize = useCallback((e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    let startW = 0;
+    // Capture initial width synchronously
+    setCurlWidth(w => { startW = w; return w; });
+    const el = e.currentTarget;
+    el.classList.add('cm-resize-handle--dragging');
+    const onMove = (mv) => {
+      const newW = Math.min(CURL_MAX, Math.max(CURL_MIN, startW + (mv.clientX - startX)));
+      setCurlWidth(newW);
+    };
+    const onUp = () => {
+      el.classList.remove('cm-resize-handle--dragging');
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onActivityResize = useCallback((e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    let startW = 0;
+    setActivityWidth(w => { startW = w; return w; });
+    const el = e.currentTarget;
+    el.classList.add('cm-resize-handle--dragging');
+    const onMove = (mv) => {
+      const newW = Math.min(ACT_MAX, Math.max(ACT_MIN, startW - (mv.clientX - startX)));
+      setActivityWidth(newW);
+    };
+    const onUp = () => {
+      el.classList.remove('cm-resize-handle--dragging');
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onTabResize = useCallback((e) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    let startH = 0;
+    setTabContentHeight(h => { startH = h; return h; });
+    const el = e.currentTarget;
+    el.classList.add('cm-resize-handle--dragging');
+    const onMove = (mv) => {
+      const newH = Math.min(TAB_MAX, Math.max(TAB_MIN, startH + (mv.clientY - startY)));
+      setTabContentHeight(newH);
+    };
+    const onUp = () => {
+      el.classList.remove('cm-resize-handle--dragging');
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (activeCurl && activeCurl.write_permission === false) {
       setShowReadOnlyToast(true);
@@ -1880,11 +1959,18 @@ export default function CollectionModal({ collection, onClose, recentCollections
             onAdd={addNewRequest}
             onRename={handleRenameRequest}
             open={curlPanelOpen}
-
+            panelWidth={curlPanelOpen ? curlWidth : 0}
             favCurls={favCurls}
             onToggleFav={toggleFavCurl}
             fetchingSummaries={fetchingSummaries}
           />
+          {curlPanelOpen && (
+            <div
+              className="cm-resize-handle cm-resize-handle--v"
+              onMouseDown={onCurlResize}
+              title="Drag to resize"
+            />
+          )}
 
           {/* Workspace */}
           <div className="cm-workspace">
@@ -1982,8 +2068,8 @@ export default function CollectionModal({ collection, onClose, recentCollections
               ))}
             </div>
 
-            {/* Tab content */}
-            <div className="cm-tab-content">
+            {/* Tab content — vertically resizable */}
+            <div className="cm-tab-content" style={{ maxHeight: tabContentHeight }}>
 
               {/* HEADERS */}
               {activeTab==='headers' && (
@@ -2126,6 +2212,13 @@ export default function CollectionModal({ collection, onClose, recentCollections
               )}
             </div>
 
+            {/* Vertical resize handle between tab content and response */}
+            <div
+              className="cm-resize-handle cm-resize-handle--h"
+              onMouseDown={onTabResize}
+              title="Drag to resize"
+            />
+
             {/* Response */}
             {fetchingDetails && (
               <div className="cm-loading-overlay-bar" style={{ padding: '4px 16px', background: '#3b82f615', color: '#3b82f6', fontSize: '12px', textAlign: 'center' }}>
@@ -2267,7 +2360,14 @@ export default function CollectionModal({ collection, onClose, recentCollections
           </div>
 
           {/* Activity Panel */}
-          <ActivityFeedPanel open={activityPanelOpen} onClose={()=>setActivityPanelOpen(false)} collectionId={collection?.master_id || collection?.masterId || collection?._id || collection?.id} currentUser={user} />
+          {activityPanelOpen && (
+            <div
+              className="cm-resize-handle cm-resize-handle--v"
+              onMouseDown={onActivityResize}
+              title="Drag to resize"
+            />
+          )}
+          <ActivityFeedPanel open={activityPanelOpen} onClose={()=>setActivityPanelOpen(false)} collectionId={collection?.master_id || collection?.masterId || collection?._id || collection?.id} currentUser={user} panelWidth={activityPanelOpen ? activityWidth : 0} />
         </div>
 
         {/* Recent hover strip */}
