@@ -179,7 +179,7 @@ function CardMenu({ onOpen, onCustomize, onDelete }) {
 }
 
 // ─── Collection Card ──────────────────────────────────────────────────────────
-function CollectionCard({ collection, style, onClick, onCustomize, onDelete, isFav, onToggleFav }) {
+function CollectionCard({ collection, style, onClick, onCustomize, onDelete, isFav, onToggleFav, onTogglePrivacy, showPrivacyScope }) {
   const method  = METHOD_COLORS[collection.default_method] || METHOD_COLORS.GET;
   const timeStr = relativeDay(collection.updated_at);
   const count   = requestCount(collection);
@@ -192,6 +192,22 @@ function CollectionCard({ collection, style, onClick, onCustomize, onDelete, isF
         <div className="hc-card-method" style={{ background: method.bg, color: method.text }}>
           {collection.default_method}
         </div>
+        
+        {showPrivacyScope && (
+          <button
+            className={`hc-privacy-btn${collection.is_private ? ' hc-privacy-btn--on' : ''}`}
+            title={collection.is_private ? 'Private collection (click to share)' : 'Shared collection (click to make private)'}
+            onClick={(e) => { e.stopPropagation(); onTogglePrivacy?.(); }}
+            aria-label={collection.is_private ? 'Share' : 'Make Private'}
+          >
+            {collection.is_private ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
+            )}
+          </button>
+        )}
+
         <button
           className={`hc-fav-btn${isFav ? ' hc-fav-btn--on' : ''}`}
           title={isFav ? 'Remove from favourites' : 'Add to favourites'}
@@ -632,6 +648,20 @@ export default function HomePage({ user, onLogout }) {
     }
   }, [favIds, teamId, orgId]);
 
+  // ── Toggle Privacy (optimistic with rollback) ───────────────────────────────
+  const handleTogglePrivacy = useCallback(async (c) => {
+    const nextPrivacy = !c.is_private;
+    // Optimistic UI update
+    setCollections(prev => prev.map(item => item.id === c.id ? { ...item, is_private: nextPrivacy } : item));
+    try {
+      await updateCollection(c.id, { is_private: nextPrivacy }, teamId, orgId);
+    } catch (err) {
+      console.error('[handleTogglePrivacy]', err);
+      // Revert if error
+      setCollections(prev => prev.map(item => item.id === c.id ? { ...item, is_private: c.is_private } : item));
+    }
+  }, [teamId, orgId]);
+
   // ── Filtered + sorted list ──────────────────────────────────────────────────
   const filtered = useMemo(() => {
     let list = [...collections];
@@ -921,6 +951,8 @@ export default function HomePage({ user, onLogout }) {
                   onDelete={() => handleDeleteCollection(c.id)}
                   isFav={favIds.has(c.id)}
                   onToggleFav={() => toggleFavCollection(c.id)}
+                  onTogglePrivacy={() => handleTogglePrivacy(c)}
+                  showPrivacyScope={!!(teamId || orgId) && (c.owner_id === user?.id || activeTab === 'home')}
                 />
               ))}
               {(activeTab === 'home' || activeTab === 'collections') && (

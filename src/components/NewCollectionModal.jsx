@@ -123,6 +123,7 @@ export default function NewCollectionModal({ existing = null, onClose, onSave })
   const [tags,    setTags]          = useState(existing?.tags    || []);
   const [tagDraft, setTagDraft]     = useState('');
   const [nameErr, setNameErr]       = useState('');
+  const [isPrivate, setIsPrivate]   = useState(existing?.is_private || false);
 
   useEffect(() => { setTimeout(() => nameRef.current?.focus(), 60); }, []);
   useEffect(() => {
@@ -161,6 +162,7 @@ export default function NewCollectionModal({ existing = null, onClose, onSave })
       pattern,
       default_method: method,
       tags,
+      is_private:     isPrivate,
       requests:       existing?.requests || [],
       updated_at:     new Date().toISOString().split('T')[0],
     }, isEdit);
@@ -299,6 +301,31 @@ export default function NewCollectionModal({ existing = null, onClose, onSave })
                       <span>{p}</span>
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Privacy Toggle */}
+              <div className="nc-field" style={{ marginTop: '0.5rem' }}>
+                <label>Privacy</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontSize: '0.85rem', color: 'var(--text-dim)' }}>
+                  <button 
+                    onClick={() => setIsPrivate(v => !v)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '0.4rem', 
+                      background: isPrivate ? 'rgba(239, 68, 68, 0.1)' : 'var(--surface)', 
+                      border: `1.5px solid ${isPrivate ? '#ef4444' : 'var(--border)'}`, 
+                      color: isPrivate ? '#ef4444' : 'var(--text-dim)', 
+                      padding: '0.4rem 0.8rem', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.15s'
+                    }}
+                  >
+                    {isPrivate ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
+                    )}
+                    <span>{isPrivate ? 'Private' : 'Shared'}</span>
+                  </button>
+                  <span>{isPrivate ? 'Only you can see this collection' : 'Other team members can see this collection'}</span>
                 </div>
               </div>
             </div>

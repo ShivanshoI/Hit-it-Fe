@@ -637,6 +637,57 @@
   box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.18);
 }
 
+/* ── Collection privacy lock ────────────────────────────────────────────────── */
+
+.hc-privacy-btn {
+  position: absolute;
+  top: 0.55rem;
+  right: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.75);
+  opacity: 0;
+  transition: opacity 0.18s, transform 0.18s, background 0.18s;
+  z-index: 5;
+}
+
+/* Reveal on card hover */
+.hc-card:hover .hc-privacy-btn {
+  opacity: 1;
+}
+
+/* Always visible when private */
+.hc-privacy-btn.hc-privacy-btn--on {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+}
+
+.hc-privacy-btn:hover {
+  transform: scale(1.15);
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+}
+
+.hc-privacy-btn.hc-privacy-btn--on:hover {
+  background: rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
+/* Pop keyframe when toggled */
+.hc-privacy-btn--on svg {
+  animation: hcFavPop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 /* ── Toolbar "Favourites" filter pill ──────────────────────────────────────── */
 .hp-fav-filter {
   display: flex;
