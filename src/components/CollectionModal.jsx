@@ -540,8 +540,20 @@ function ActivityFeedPanel({ open, onClose, collectionId, currentUser, panelWidt
           master_id: collectionId, // Use master_id to match backend expectations
           context: { url: window.location.href }
         }, teamId, orgId);
+        
         // Replace optimistic with real user message + ai response 
-        setItems(p => p.map(item => item.id === optimisticId ? user_message : item).concat(ai_response));
+        setItems(p => {
+          let nextP = p;
+          if (nextP.some(item => item.id === user_message.id)) {
+            nextP = nextP.filter(item => item.id !== optimisticId);
+          } else {
+            nextP = nextP.map(item => item.id === optimisticId ? user_message : item);
+          }
+          if (!nextP.some(item => item.id === ai_response.id)) {
+            nextP = nextP.concat(ai_response);
+          }
+          return nextP;
+        });
       } else {
         const payload = {
           type: isIssue ? 'issue' : 'user_chat',
@@ -552,15 +564,21 @@ function ActivityFeedPanel({ open, onClose, collectionId, currentUser, panelWidt
         const newActivity = await sendActivity(collectionId, payload, teamId, orgId);
         
         // Merge real backend data but PROTECT the content if backend returns ""
-        setItems(p => p.map(item => {
-          if (item.id === optimisticId) {
-             return {
-               ...newActivity,
-               content: newActivity.content || item.content // Keep optimistic if backend is empty
-             };
+        setItems(p => {
+          if (p.some(item => item.id === newActivity.id)) {
+            // WS already added it, just remove optimistic
+            return p.filter(item => item.id !== optimisticId);
           }
-          return item;
-        }));
+          return p.map(item => {
+            if (item.id === optimisticId) {
+               return {
+                 ...newActivity,
+                 content: newActivity.content || item.content // Keep optimistic if backend is empty
+               };
+            }
+            return item;
+          });
+        });
       }
       setTimeout(scrollToBottom, 50);
     } catch (err) {
