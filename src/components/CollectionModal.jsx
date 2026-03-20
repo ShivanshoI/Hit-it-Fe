@@ -1319,7 +1319,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
     const loadGlobals = async () => {
       try {
         const [vars, overrides] = await Promise.all([
-          getVariables(),
+          getVariables(collection?.team_id, collection?.org_id),
           collection?.id ? getOverrides(collection.id) : Promise.resolve({})
         ]);
         setGlobalVars(vars);
@@ -2513,6 +2513,8 @@ export default function CollectionModal({ collection, onClose, recentCollections
       <GlobalStore
         collectionId={collection?.id}
         collectionName={collection?.name}
+        teamId={collection?.team_id}
+        orgId={collection?.org_id}
         onClose={() => setGlobalStoreOpen(false)}
         activeEnv={activeEnv}
         onChangeEnv={changeEnv}

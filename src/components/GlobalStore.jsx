@@ -290,7 +290,7 @@ function AddVarForm({ envs, categories, onAdd, onClose }) {
 }
 
 // ─── Main Global Store Panel ───────────────────────────────────────────────────
-export default function GlobalStore({ collectionId, collectionName, onClose, activeEnv: activeEnvProp, onChangeEnv }) {
+export default function GlobalStore({ collectionId, collectionName, teamId, orgId, onClose, activeEnv: activeEnvProp, onChangeEnv }) {
   const [vars, setVars]               = useState([]);
   const [overrides, setOverrides]     = useState({});
   const [loading, setLoading]         = useState(true);
@@ -322,7 +322,7 @@ export default function GlobalStore({ collectionId, collectionName, onClose, act
       setLoading(true);
       try {
         const [vData, oData] = await Promise.all([
-          getVariables(),
+          getVariables(teamId, orgId),
           collectionId ? getOverrides(collectionId) : Promise.resolve({})
         ]);
         setVars(vData);
@@ -334,7 +334,7 @@ export default function GlobalStore({ collectionId, collectionName, onClose, act
       }
     };
     load();
-  }, [collectionId]);
+  }, [collectionId, teamId, orgId]);
 
   // Smooth close — play exit animation then unmount
   const handleClose = useCallback(() => {
@@ -372,12 +372,12 @@ export default function GlobalStore({ collectionId, collectionName, onClose, act
     return () => window.removeEventListener('keydown', onKey, true);
   }, [handleClose]);
 
-  const allTags = [...new Set(vars.flatMap(v => v.tags))];
+  const allTags = [...new Set(vars.flatMap(v => v.tags || []))];
 
   const filtered = vars.filter(v => {
-    const matchSearch = !search || v.key.includes(search.toLowerCase()) || v.description.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || v.key.includes(search.toLowerCase()) || (v.description && v.description.toLowerCase().includes(search.toLowerCase()));
     const matchCat    = filterCat === 'all' || v.category === filterCat;
-    const matchTag    = !filterTag || v.tags.includes(filterTag);
+    const matchTag    = !filterTag || (v.tags && v.tags.includes(filterTag));
     return matchSearch && matchCat && matchTag;
   });
 
@@ -391,20 +391,20 @@ export default function GlobalStore({ collectionId, collectionName, onClose, act
 
   const updateVar = async (id, updated) => {
     try {
-      const res = await updateVariable(id, updated);
-      setVars(p => p.map(v => v.id===id ? res : v));
+      const res = await updateVariable(id, updated, teamId, orgId);
+      setVars(p => p.map(v => v.id===id ? { ...v, ...res } : v));
     } catch (err) { console.error(err); }
   };
   const deleteVar = async (id) => {
     try {
-      await deleteVariable(id);
+      await deleteVariable(id, teamId, orgId);
       setVars(p => p.filter(v => v.id!==id));
     } catch (err) { console.error(err); }
   };
   const addVar = async (v) => {
     try {
-      const res = await createVariable(v);
-      setVars(p => [...p, res]);
+      const res = await createVariable(v, teamId, orgId);
+      setVars(p => [...p, { ...v, ...res }]);
     } catch (err) { console.error(err); }
   };
 
