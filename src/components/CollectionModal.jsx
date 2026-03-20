@@ -24,6 +24,28 @@ const METHOD_STYLE = {
 };
 const STATUS_COLOR = { 2:'#10b981', 3:'#f59e0b', 4:'#ef4444', 5:'#ef4444' };
 
+// ─── Utility: JSON format / validate ─────────────────────────────────────────
+// Returns { formatted: string, error: string|null }
+function tryFormatJson(text) {
+  if (!text || !text.trim()) return { formatted: text, error: null };
+  
+  // 1. Strip null bytes and other control chars that survive curl copy-paste
+  // 2. Replace non-breaking spaces (\u00A0) and other weird spaces with standard space
+  //    This is extremely common when copy-pasting JSON from web pages or some tools
+  const cleaned = text
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')
+    .replace(/[\u00A0\u1680​\u180e\u2000-\u200a\u202f\u205f\u3000]/g, ' ')
+    .trim();
+
+  try {
+    return { formatted: JSON.stringify(JSON.parse(cleaned), null, 2), error: null };
+  } catch (e) {
+    // Even when invalid, collapse excess whitespace so the button does something visible
+    const compacted = cleaned.replace(/[ \t]+/g, ' ');
+    return { formatted: compacted, error: e.message };
+  }
+}
+
 // ─── Utility: Parse curl Command ──────────────────────────────────────────────
 const parseCurlCommand = (curlStr) => {
   const result = { method: 'GET', url: '', headers: [], auth: 'No Auth', token: '', body: '', isCurl: false };
@@ -1452,6 +1474,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
   }, []);
 
   const [kvState, setKvState] = useState(() => initKV(firstCurl));
+  const [bodyError, setBodyError] = useState(null);
   const canEdit = activeCurl ? activeCurl.write_permission !== false : true;
 
   const activeCurlIdRef = useRef(activeCurl?.id);
@@ -1564,6 +1587,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
     setSaveListOpen(false);
     setCompareSelections([]);
     setResponseView('response');
+    setBodyError(null);
 
     // If we have cached details, restore them instantly!
     if (cachedDetails[curl.id]) {
@@ -2064,7 +2088,12 @@ export default function CollectionModal({ collection, onClose, recentCollections
                         headers: parsed.headers,
                         auth: parsed.auth,
                         token: parsed.token,
-                        body: parsed.body || ''
+                        body: (() => {
+                          const { formatted, error } = tryFormatJson(parsed.body || '');
+                          // Defer state update for error to avoid batching issues
+                          setTimeout(() => setBodyError(error), 0);
+                          return formatted;
+                        })()
                       }));
                     } else {
                       setUrl(val);
@@ -2200,12 +2229,38 @@ export default function CollectionModal({ collection, onClose, recentCollections
                 <div className="cm-editor-wrap">
                   <div className="cm-editor-toolbar">
                     <span className="cm-editor-label">Request Body</span>
-                    <span className="cm-editor-type">JSON</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      {canEdit && (kvState.body || '').trim() && (
+                        <button
+                          type="button"
+                          className="cm-body-format-btn"
+                          title="Auto-format as JSON"
+                          onClick={() => {
+                            const { formatted, error } = tryFormatJson(kvState.body || '');
+                            setKvState(prev => ({ ...prev, body: formatted }));
+                            setBodyError(error);
+                          }}
+                        >
+                          ⌥ Format
+                        </button>
+                      )}
+                      <span className="cm-editor-type">JSON</span>
+                    </div>
                   </div>
+                  {bodyError && (
+                    <div className="cm-body-error-bar" title={bodyError}>
+                      <span className="cm-body-error-dot"/>
+                      <span className="cm-body-error-msg">{bodyError}</span>
+                    </div>
+                  )}
                   <textarea 
-                    className="cm-editor" 
+                    className={`cm-editor${bodyError ? ' cm-editor--error' : ''}`}
                     value={kvState.body} 
-                    onChange={e => setKvState(prev => ({ ...prev, body: e.target.value }))}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setBodyError(val.trim() ? tryFormatJson(val).error : null);
+                      setKvState(prev => ({ ...prev, body: val }));
+                    }}
                     spellCheck={false}
                     disabled={!canEdit}
                   />
