@@ -1015,6 +1015,8 @@ export default function HomePage({ user, onLogout }) {
           existing={editingColl}
           onClose={() => { setNewCollOpen(false); setEditingColl(null); }}
           onSave={handleSaveCollection}
+          isTeamMode={isTeamMode}
+          isOrgMode={isOrgMode}
         />
       )}
       {importOpen && (

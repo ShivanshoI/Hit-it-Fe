@@ -1207,7 +1207,7 @@ function CurlModal({ curl, onClose, onApply, isReadOnly }) {
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
 export default function CollectionModal({ collection, onClose, recentCollections, onSelectCollection, user, initialCurlId }) {
-  const { teamId, orgId } = useTeam();
+  const { teamId, orgId, isTeamMode, isOrgMode } = useTeam();
   // Each collection owns its own requests — seed from collection.requests (future: from API)
   const [curls, setCurls] = useState(() => collection?.requests || []);
   const [cachedDetails, setCachedDetails] = useState({}); // Stores full details for previously clicked requests
@@ -1994,23 +1994,24 @@ export default function CollectionModal({ collection, onClose, recentCollections
                 title={`Active env: ${activeEnvData.label}`}
               />
             </button>
-            {/* ── Share ── */}
-            <div className="cm-share-anchor">
-              <button className={`cm-icon-btn-label${shareOpen?' active':''}`} onClick={()=>setShareOpen(o=>!o)}>
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                  <circle cx="10.5" cy="2.5" r="1.5"/><circle cx="2.5" cy="6.5" r="1.5"/><circle cx="10.5" cy="10.5" r="1.5"/>
-                  <path d="M4 5.8l5-2.6M4 7.2l5 2.6"/>
-                </svg>
-                Share
-              </button>
-              {shareOpen && (
-                <SharePanel
-                  collection={collection}
-                  activeCurl={activeCurl}
-                  onClose={() => setShareOpen(false)}
-                />
-              )}
-            </div>
+            {!(isTeamMode || isOrgMode) && (
+              <div className="cm-share-anchor">
+                <button className={`cm-icon-btn-label${shareOpen?' active':''}`} onClick={()=>setShareOpen(o=>!o)}>
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                    <circle cx="10.5" cy="2.5" r="1.5"/><circle cx="2.5" cy="6.5" r="1.5"/><circle cx="10.5" cy="10.5" r="1.5"/>
+                    <path d="M4 5.8l5-2.6M4 7.2l5 2.6"/>
+                  </svg>
+                  Share
+                </button>
+                {shareOpen && (
+                  <SharePanel
+                    collection={collection}
+                    activeCurl={activeCurl}
+                    onClose={() => setShareOpen(false)}
+                  />
+                )}
+              </div>
+            )}
             <button className={`cm-icon-btn-label${activityPanelOpen?' active':''}`} onClick={()=>setActivityPanelOpen(!activityPanelOpen)}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
                 <path d="M12 1H2a1 1 0 00-1 1v7a1 1 0 001 1h2l3 3 3-3h2a1 1 0 001-1V2a1 1 0 00-1-1z"/>
