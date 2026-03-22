@@ -6,6 +6,7 @@ import TeamPanel from '../components/TeamPanel';
 import TeamActivityFeed from '../components/TeamActivityFeed';
 import ProfilePage from './ProfilePage';
 import PlanPage from './PlanPage';
+import TestSuite from '../components/TestSuite';
 import { useTeam, PALETTES } from '../context/TeamContext';
 import {
   getCollections,
@@ -290,6 +291,10 @@ const NAV_ITEMS = [
   {
     id: 'history', label: 'History',
     icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6" /><path d="M8 4v4l2.5 2.5" /></svg>,
+  },
+  {
+    id: 'test-suite', label: 'Test Suite',
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>,
   },
   // {
   //   id: 'envs', label: 'Environments',
@@ -602,7 +607,7 @@ export default function HomePage({ user, onLogout }) {
 
   // ── Tab switch → reset guard + fetch ───────────────────────────────────────
   useEffect(() => {
-    if (['team', 'profile', 'plan'].includes(activeTab)) return;
+    if (['team', 'profile', 'plan', 'test-suite'].includes(activeTab)) return;
     fetchingRef.current = false; // clear guard on every tab change
     if (activeTab === 'history') {
       fetchHistory(1, true);
@@ -751,6 +756,7 @@ export default function HomePage({ user, onLogout }) {
     if (activeTab === 'plan')    return 'Subscription Plan';
     if (activeTab === 'history') return 'Execution History';
     if (activeTab === 'team')    return 'Teams & Organization';
+    if (activeTab === 'test-suite') return 'Test Suite';
     if (isTeamMode && isOrgMode) return `${activeOrg.name} / ${activeTeam.name} — Collections`;
     if (isTeamMode)              return `${activeTeam.name} — Collections`;
     if (isOrgMode)               return `${activeOrg.name} — Collections`;
@@ -835,6 +841,9 @@ export default function HomePage({ user, onLogout }) {
           <div className="hp-team-view" style={{ padding: '1.5rem 2.4rem 3rem' }}>
             <TeamPanel user={user} />
           </div>
+
+        ) : activeTab === 'test-suite' ? (
+          <TestSuite />
 
         ) : activeTab === 'history' ? (
           <div className="hp-history-view" style={{ padding: '0 2.4rem 3rem' }}>

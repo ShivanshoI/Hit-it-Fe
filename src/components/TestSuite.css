@@ -1,0 +1,123 @@
+.ts-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+  background: radial-gradient(circle at top left, rgba(108, 63, 197, 0.05) 0%, transparent 40%),
+              radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.05) 0%, transparent 40%);
+  color: #fff;
+  text-align: center;
+}
+
+.ts-content {
+  max-width: 600px;
+  animation: ts-fade-in 0.8s ease-out;
+}
+
+@keyframes ts-fade-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ts-icon-wrap {
+  width: 90px;
+  height: 90px;
+  background: linear-gradient(135deg, rgba(108, 63, 197, 0.2), rgba(14, 165, 233, 0.2));
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 2rem;
+  color: #7c3aed;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 
+              0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.ts-title {
+  font-size: 2.8rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  background: linear-gradient(to right, #fff, #9ca3af);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em;
+}
+
+.ts-description {
+  font-size: 1.1rem;
+  color: #9ca3af;
+  line-height: 1.6;
+  margin-bottom: 3rem;
+}
+
+.ts-placeholder-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 2.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.ts-placeholder-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(to right, transparent, #7c3aed, #0ea5e9, transparent);
+}
+
+.ts-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 1.5rem;
+}
+
+.ts-placeholder-card h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: #f3f4f6;
+}
+
+.ts-feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 2rem;
+  text-align: left;
+  display: inline-block;
+}
+
+.ts-feature-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #9ca3af;
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+}
+
+.ts-feature-list li svg {
+  color: #10b981;
+  flex-shrink: 0;
+}
+
+.ts-footer-note {
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-style: italic;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 1.5rem;
+}
