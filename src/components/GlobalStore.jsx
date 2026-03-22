@@ -63,10 +63,14 @@ function VarRow({ variable, envs, categories, activeEnv, collectionId, collectio
   };
   const addTag = () => {
     const t = tagDraft.trim().toLowerCase().replace(/\s+/g,'-');
-    if (t && !variable.tags.includes(t)) onUpdate({ ...variable, tags: [...variable.tags, t] });
+    const tags = variable.tags || [];
+    if (t && !tags.includes(t)) onUpdate({ ...variable, tags: [...tags, t] });
     setTagDraft('');
   };
-  const removeTag = (t) => onUpdate({ ...variable, tags: variable.tags.filter(x => x !== t) });
+  const removeTag = (t) => {
+    const tags = variable.tags || [];
+    onUpdate({ ...variable, tags: tags.filter(x => x !== t) });
+  };
 
   return (
     <div className={`gs-var-row ${expanded ? 'gs-var-row--expanded' : ''}`}>
@@ -150,7 +154,7 @@ function VarRow({ variable, envs, categories, activeEnv, collectionId, collectio
           <div className="gs-detail-row gs-detail-row--wrap">
             <span className="gs-detail-label">Tags</span>
             <div className="gs-tags-row">
-              {variable.tags.map(t => <Tag key={t} label={t} onRemove={() => removeTag(t)} />)}
+              {(variable.tags || []).map(t => <Tag key={t} label={t} onRemove={() => removeTag(t)} />)}
               <input
                 className="gs-tag-input"
                 placeholder="+ add tag"
