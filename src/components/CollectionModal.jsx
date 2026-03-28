@@ -47,7 +47,7 @@ function tryFormatJson(text) {
 }
 
 // ─── Utility: Parse curl Command ──────────────────────────────────────────────
-const parseCurlCommand = (curlStr) => {
+export const parseCurlCommand = (curlStr) => {
   const result = { method: 'GET', url: '', headers: [], auth: 'No Auth', token: '', body: '', isCurl: false };
   const trimmed = curlStr.trim();
   

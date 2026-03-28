@@ -19,7 +19,7 @@ function scopeHeaders(teamId = null, orgId = null) {
  * GET /api/history?page=&limit=
  */
 export async function getHistory(page = 1, limit = 20, teamId = null, orgId = null) {
-  const body = await apiClient(`/api/history?page=${page}&limit=${limit}`, {
+  const body = await apiClient(`/api/history?page=${page}&limit=${limit}&source=manual`, {
     method: 'GET',
     auth: true,
     headers: scopeHeaders(teamId, orgId),
