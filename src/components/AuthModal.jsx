@@ -32,6 +32,7 @@ export default function AuthModal({ onClose, onSuccess, initialRedirectData }) {
   const [view, setView] = useState('login');
   const [loading, setLoading] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const [loginForm, setLoginForm] = useState({ identifier: '', password: '' });
   const [loginErr, setLoginErr] = useState({});
@@ -194,13 +195,13 @@ export default function AuthModal({ onClose, onSuccess, initialRedirectData }) {
                 <button 
                   className="am-btn am-btn--primary" 
                   onClick={handleGoogleAuth} 
-                  disabled={loading}
-                  style={{ background: '#fff', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  disabled={loading || !termsAccepted}
+                  style={{ background: '#fff', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: termsAccepted ? 1 : 0.6 }}
                 >
                   {loading ? <span className="am-spin" /> : <>{googleIcon} Continue with Google</>}
                 </button>
                 <div className="am-divider" style={{ margin: '1rem 0', width: '100%' }}><span>or</span></div>
-                <button className="am-btn am-btn--ghost" onClick={() => setShowEmail(true)}>Use Password</button>
+                <button className="am-btn am-btn--ghost" disabled={!termsAccepted} style={{ opacity: termsAccepted ? 1 : 0.5 }} onClick={() => setShowEmail(true)}>Use Password</button>
               </div>
             ) : (
               <>
@@ -210,11 +211,18 @@ export default function AuthModal({ onClose, onSuccess, initialRedirectData }) {
                 <Field label="Password" required type="password" placeholder="••••••••"
                   value={loginForm.password} onChange={(v) => setLoginForm({ ...loginForm, password: v })}
                   error={loginErr.password} />
-                <button className="am-btn am-btn--primary" onClick={handleLogin} disabled={loading}>
+                <button className="am-btn am-btn--primary" onClick={handleLogin} disabled={loading || !termsAccepted} style={{ opacity: termsAccepted ? 1 : 0.6 }}>
                   {loading ? <span className="am-spin" /> : 'Login'}
                 </button>
               </>
             )}
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '1.5rem 0 0', gap: '8px', fontSize: '13px', color: '#888', textAlign: 'center' }}>
+              <input type="checkbox" id="terms-accept" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} style={{ cursor: 'pointer', width: '16px', height: '16px', transform: 'translateY(1px)' }} />
+              <label htmlFor="terms-accept" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                I accept the <a href="/privacy-policy" target="_blank" style={{ color: '#111', fontWeight: '600', textDecoration: 'underline' }}>Privacy Policy</a>
+              </label>
+            </div>
           </div>
         )}
 
@@ -255,10 +263,18 @@ export default function AuthModal({ onClose, onSuccess, initialRedirectData }) {
               value={regForm.nickname} onChange={(v) => setRegForm({ ...regForm, nickname: v })} />
             <Field label="Google Email" disabled={true}
               value={regForm.email} onChange={() => {}} />
-            <button className="am-btn am-btn--primary" onClick={handleGoogleCreate} disabled={loading} style={{ marginTop: '1rem' }}>
+
+            <button className="am-btn am-btn--primary" onClick={handleGoogleCreate} disabled={loading || !termsAccepted} style={{ marginTop: '1rem', opacity: termsAccepted ? 1 : 0.6 }}>
               {loading ? <span className="am-spin" /> : 'Create Account'}
             </button>
             <button className="am-btn am-btn--ghost" onClick={() => setView('login')}>← Cancel</button>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '1.5rem 0 0', gap: '8px', fontSize: '13px', color: '#888', textAlign: 'center' }}>
+              <input type="checkbox" id="terms-accept-google" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} style={{ cursor: 'pointer', width: '16px', height: '16px', transform: 'translateY(1px)' }} />
+              <label htmlFor="terms-accept-google" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                I accept the <a href="/privacy-policy" target="_blank" style={{ color: '#111', fontWeight: '600', textDecoration: 'underline' }}>Privacy Policy</a>
+              </label>
+            </div>
           </div>
         )}
 

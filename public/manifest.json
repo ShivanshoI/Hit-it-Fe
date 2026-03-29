@@ -1,0 +1,17 @@
+{
+  "short_name": "Hit-It",
+  "name": "Hit-It API Testing Suite",
+  "description": "The ultimate API testing and development suite.",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "theme_color": "#1a1a1a"
+}

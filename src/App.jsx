@@ -5,6 +5,8 @@ import HomePage from './pages/HomePage';
 import AuthModal from './components/AuthModal';
 import { getGoogleRedirectResult } from './api/auth.google.api';
 import BirdLoader from './components/BirdLoader';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import ExtensionPrivacyPolicy from './pages/ExtensionPrivacyPolicy';
 
 import { TeamProvider, useTeam } from './context/TeamContext';
 import { NotificationProvider } from './context/NotificationContext';
@@ -30,6 +32,14 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [pendingRedirectAuth, setPendingRedirectAuth] = useState(null);
+
+  // Simple hard-routes for static pages
+  if (window.location.pathname === '/privacy-policy') {
+    return <PrivacyPolicy />;
+  }
+  if (window.location.pathname === '/extension-privacy-policy' || window.location.pathname === '/other-product-privacy') {
+    return <ExtensionPrivacyPolicy />;
+  }
 
   const handleModalClose = () => {
     setModalOpen(false);

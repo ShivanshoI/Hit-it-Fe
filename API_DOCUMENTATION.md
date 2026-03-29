@@ -13,14 +13,14 @@ Depending on the active workspace (Personal, Team, or Org), the following header
 
 | Header      | Condition / Rule                                         |
 | :---------- | :------------------------------------------------------- |
-| `X-Org-Id`  | Sent if an organization is active or explicitly provided. |
+| `X-Org-Id`  | Sent if an organization is active or explicitly provided.|
 | `X-Team-Id` | Sent if a team is active or explicitly provided.         |
-| `Authorization` | `Bearer <token>` sent if `auth: true` is requested.      |
+| `Authorization` | `Bearer <token>` sent if `auth: true` is requested.  |
 
 > [!NOTE]
 > **Automatic Scoping**: The `apiClient` automatically retrieves the active Organization ID from `localStorage.getItem('hitit_active_org')` if not explicitly passed, ensuring workspace consistency across all sessions.
 
----
+-------------------------------------------------------------------------
 
 ## 🔐 Authentication (`auth.api.jsx`)
 
@@ -61,6 +61,7 @@ Real-time sidebar for team-wide communication and issue tracking.
 ### 1. Get Collections
 - **Path**: `GET /api/collections`
 - **Variants**: Supports `filter=fav`, `filter=share`, `filter=mine`.
+- **Test Suite Scope**: Append `?testSuit=true` to retrieve only Test Suite collections.
 
 ### 2. Visual Customization
 - **Accent Colors**: 8 curated palettes (Purple, Blue, Green, etc.).
@@ -122,11 +123,37 @@ Hit-IT supports dynamic variable injection using the `{{key}}` syntax.
 
 ---
 
-## 💳 Billing & Account (`billing.api.js`, `profile.api.js`)
+## 🧪 Test Suite & Automated Testing (`testSuite.api.js`)
 
-- **Subscription**: `GET /api/user/subscription`.
-- **Invoices**: `GET /api/billing/invoices` & `GET /api/billing/invoices/:id/download`.
-- **Profile**: `PUT /api/user/profile` (Updates name, email, theme).
+The Test Suite allows for regression testing by comparing current responses against saved expectations.
+
+### 1. Execute Test Run (Async Job)
+- **Path**: `POST /api/test-suite/jobs`
+- **Payload**: `{ "collections": ["c1"], "requests": ["r1", "r2"] }`
+- **Objective**: Generates tracking records and kicks off async execution. If any request lacks `expected_response`, returns `400`.
+- **Response**: `{ "success": true, "data": { "job_id": "uuid-123" } }`
+
+### 2. Poll Job Status
+- **Path**: `GET /api/test-suite/jobs/:id/status`
+- **Objective**: Checks async progress.
+- **Response**: `{ "status": "processing", "successful": 4, "failed": 0 }`
+
+### 3. Fetch Job Results
+- **Path**: `GET /api/test-suite/jobs/:id/results`
+- **Objective**: Get final arrays of IDs to paint the UI red/green.
+- **Response**: `{ "passed_ids": ["r1"], "failed_ids": ["r2"] }`
+
+### 4. Fetch Details & Diff
+- **Path**: `GET /api/test-suite/requests/:id/details`
+- **Objective**: Fetch expected JSON vs the actual saved `history` payload for a visual diff.
+
+### 5. Manage Expectations
+- **Path**: `PATCH /api/test-suite/requests/:id/expected`
+- **Payload**: `{ "expected_response": "{ \"status\": \"ok\" }" }`
+- **Objective**: Update the "Source of Truth". Must be set before a request can be run.
+
+### 4. Collection & Request Management
+- **Rule**: All standard CRUD operations on `/api/collections` and `/api/requests` must include `?testSuit=true` (or `{ "testSuit": true }` in POST/PATCH bodies) to isolate these assets from the main operational workspace.
 
 ---
 

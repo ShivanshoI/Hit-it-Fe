@@ -1,5 +1,29 @@
 import './LandingPage.css';
 
+const ALIBIS = [
+  [
+    "Hit-It completely changed how we test APIs.", 
+    "Incredibly fast and perfectly designed. 🚀",
+    "Finally, a suite that doesn't feel clunky.",
+    "The best Postman alternative I've used.",
+    "Saved our QA team 10+ hours a week."
+  ],
+  [
+    "Cleanest interface in the devtools game.",
+    "Love the dark mode and lightning speed. ⚡",
+    "Mock servers literally saved our launch.",
+    "My whole team migrated in one day.",
+    "Unbelievable performance for heavy payloads."
+  ],
+  [
+    "Testing is actually fun and intuitive now.",
+    "No more bloated app frameworks draining RAM.",
+    "Simple, elegant, and extremely powerful. ✨",
+    "A total game changer for our QA process.",
+    "The real-time team syncing just works."
+  ]
+];
+
 export default function LandingPage({ onOpenAuth }) {
   return (
     <div className="land-root">
@@ -39,11 +63,15 @@ export default function LandingPage({ onOpenAuth }) {
           <button className="land-ghost" onClick={onOpenAuth}>Sign In →</button>
         </div>
 
-        <div className="land-stats">
-          {[['12K+','Users'], ['99.9%','Uptime'], ['4.9★','Rating']].map(([v, l]) => (
-            <div key={l} className="land-stat">
-              <span className="land-stat-val">{v}</span>
-              <span className="land-stat-label">{l}</span>
+        <div className="land-alibis-container">
+          {ALIBIS.map((row, i) => (
+            <div key={i} className={`land-marquee-row ${i % 2 !== 0 ? 'reverse' : ''}`}>
+              <div className="land-marquee-content">
+                {row.map((text, j) => <div className="land-alibi-card" key={j}>{text}</div>)}
+              </div>
+              <div className="land-marquee-content" aria-hidden="true">
+                {row.map((text, j) => <div className="land-alibi-card" key={j}>{text}</div>)}
+              </div>
             </div>
           ))}
         </div>

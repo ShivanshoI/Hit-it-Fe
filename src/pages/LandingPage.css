@@ -127,18 +127,65 @@
 }
 .land-ghost:hover { border-color: var(--purple-light); color: var(--purple); background: var(--purple-dim); }
 
-/* ── Stats ──────────────────────────────────────────────────────────────────── */
-.land-stats { display: flex; gap: clamp(1.5rem, 4vw, 3rem); flex-wrap: wrap; }
-
-.land-stat { display: flex; flex-direction: column; gap: 0.15rem; }
-.land-stat-val {
-  font-family: var(--font-display);
-  font-size: clamp(1.6rem, 3vw, 2.2rem);
-  letter-spacing: 0.04em; color: var(--text);
+/* ── Alibis / Testimonials ─────────────────────────────────────────────────── */
+.land-alibis-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  margin-top: 5rem;
+  width: 100vw;
+  position: relative;
+  left: calc(-1 * clamp(1.5rem, 5vw, 4rem));
+  mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+  padding: 1rem 0;
 }
-.land-stat-label {
-  font-size: 0.72rem; text-transform: uppercase;
-  letter-spacing: 0.12em; color: var(--text-muted);
+
+.land-marquee-row {
+  display: flex;
+  overflow: hidden;
+  user-select: none;
+  gap: 1.2rem;
+}
+
+.land-marquee-content {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-around;
+  gap: 1.2rem;
+  min-width: 100%;
+  animation: scroll 40s linear infinite;
+}
+
+.land-marquee-row.reverse .land-marquee-content {
+  animation-direction: reverse;
+  animation-duration: 45s; 
+}
+
+.land-alibi-card {
+  background: var(--bg-card, rgba(255,255,255,0.03));
+  border: 1px solid var(--border-2, rgba(255,255,255,0.08));
+  padding: 1.1rem 1.8rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  color: var(--text-2, #888);
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  transition: all 0.3s ease;
+  backdrop-filter: blur(8px);
+}
+
+.land-alibi-card:hover {
+  background: var(--purple-dim, rgba(108,63,197,0.1));
+  border-color: var(--purple, #6c3fc5);
+  color: var(--text, #fff);
+  transform: translateY(-2px);
+}
+
+@keyframes scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(-100% - 1.2rem)); }
 }
 
 /* ── Mobile ─────────────────────────────────────────────────────────────────── */
