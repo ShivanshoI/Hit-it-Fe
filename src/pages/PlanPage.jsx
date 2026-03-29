@@ -76,8 +76,8 @@ export default function PlanPage({ user }) {
   };
 
   // Derive currentPlanId from subscription (fallback to 'free')
-  const currentPlanId = subscription?.planId ?? 'free';
-  const currentPlanName = (Array.isArray(plans) ? plans : []).find(p => p.id === currentPlanId)?.name ?? 'Starter';
+  const currentPlanId = 'enterprise';
+  const currentPlanName = (Array.isArray(plans) ? plans : []).find(p => p.id === currentPlanId)?.name ?? 'Enterprise';
 
   const handleUpgrade = async (plan) => {
     if (plan.id === currentPlanId) return;
@@ -129,6 +129,12 @@ export default function PlanPage({ user }) {
 
       <div className="plan-container">
         
+        {/* Under Development Banner */}
+        <div className="plan-dev-banner">
+          <span className="plan-dev-badge">Pre-Alpha / Under Dev</span>
+          <p>This page is currently under development. Feature set and pricing are subject to change during the Pre-Alpha phase.</p>
+        </div>
+
         {/* Header Section */}
         <div className="plan-header glass-panel">
           <div className="plan-header-icon-wrap">
@@ -153,7 +159,7 @@ export default function PlanPage({ user }) {
                     <p>Your subscription is active and renews automatically on <strong>{formatRenewalDate(subscription.currentPeriodEnd)}</strong>.</p>
                   )
                 ) : (
-                  <p>You are on the free plan (Starter). Upgrade to unlock professional features and collaboration.</p>
+                  <p>You are on the {currentPlanName} plan. You have full access to all professional and collaboration features.</p>
                 )}
               </>
             )}
@@ -225,7 +231,7 @@ export default function PlanPage({ user }) {
           ) : (
             (Array.isArray(plans) ? plans : []).map((plan, i) => {
               const isActive      = plan.id === currentPlanId;
-              const isPopular     = plan.id === 'pro';
+              const isPopular     = plan.id === 'enterprise';
               const color         = PLAN_COLORS[plan.id] ?? '#a07ee8';
               const icon          = PLAN_ICONS[plan.id] ?? PLAN_ICONS.free;
               const monthlyPrice  = plan.monthlyPrice ?? plan.price?.monthly ?? 0;
@@ -312,7 +318,7 @@ export default function PlanPage({ user }) {
             <div>
               <h3 style={{ color: '#ef4444', marginBottom: '0.3rem', fontSize: '1rem' }}>Cancel Subscription</h3>
               <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', margin: 0 }}>
-                You'll keep access to {currentPlanName} features until <strong>{formatRenewalDate(subscription.currentPeriodEnd)}</strong>.
+                You'll keep access to {currentPlanName} features until Pre Alfa Testing Ends <strong>{formatRenewalDate(subscription.currentPeriodEnd)}</strong>.
               </p>
             </div>
             <button

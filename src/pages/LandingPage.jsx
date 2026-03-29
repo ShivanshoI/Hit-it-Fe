@@ -39,7 +39,7 @@ export default function LandingPage({ onOpenAuth }) {
 
       <section className="land-hero">
         <div className="land-pill">
-          <span className="land-pill-dot" /> Performance Platform · Beta
+          <span className="land-pill-dot" /> Performance Platform · Pre-Alfa
         </div>
 
         <h1 className="land-headline">

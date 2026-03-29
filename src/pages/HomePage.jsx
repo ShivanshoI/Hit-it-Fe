@@ -7,6 +7,7 @@ import TeamActivityFeed from '../components/TeamActivityFeed';
 import ProfilePage from './ProfilePage';
 import PlanPage from './PlanPage';
 import TestSuite from '../components/TestSuite';
+import PreAlphaModal from '../components/PreAlphaModal.jsx';
 import { useTeam, PALETTES } from '../context/TeamContext';
 import {
   getCollections,
@@ -304,6 +305,10 @@ const NAV_ITEMS = [
     id: 'team', label: 'Team',
     icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="6" cy="6" r="2.5" /><path d="M1 13c0-2.5 2-4 5-4s5 1.5 5 4" /><circle cx="12" cy="5" r="2" /><path d="M14.5 12c0-1.8-1-3-2.5-3" /></svg>,
   },
+  {
+    id: 'plan', label: 'Plan',
+    icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2 4.5A1.5 1.5 0 013.5 3h9A1.5 1.5 0 0114 4.5V10a1.5 1.5 0 01-1.5 1.5H3.5A1.5 1.5 0 012 10V4.5zM2 6h12M5 8.5h2" /></svg>,
+  },
 ];
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -475,6 +480,7 @@ export default function HomePage({ user, onLogout }) {
   const [editingColl,        setEditingColl]        = useState(null);
   const [newCollOpen,        setNewCollOpen]        = useState(false);
   const [importOpen,         setImportOpen]         = useState(false);
+  const [showPreAlphaModal,  setShowPreAlphaModal]  = useState(false);
 
   // Team feed
   const [showTeamFeed, setShowTeamFeed] = useState(false);
@@ -487,6 +493,25 @@ export default function HomePage({ user, onLogout }) {
   // becoming a dep (which would make it re-run on every tab click)
   const activeTabRef = useRef(activeTab);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+
+  // Handle Pre-Alpha Modal logic
+  useEffect(() => {
+    if (user?.id) {
+      const hasSeen = localStorage.getItem(`has_seen_prealpha_${user.id}`);
+      if (!hasSeen) {
+        // Show after a short delay for better UX
+        const timer = setTimeout(() => setShowPreAlphaModal(true), 1500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [user?.id]);
+
+  const handleClosePreAlpha = useCallback(() => {
+    setShowPreAlphaModal(false);
+    if (user?.id) {
+      localStorage.setItem(`has_seen_prealpha_${user.id}`, 'true');
+    }
+  }, [user?.id]);
 
   // ── Scope change → full data reset ─────────────────────────────────────────
   // Watches only the primitive ids. Fires on: personal↔team, personal↔org,
@@ -1036,6 +1061,9 @@ export default function HomePage({ user, onLogout }) {
       )}
       {isTeamMode && showTeamFeed && (
         <TeamActivityFeed onClose={() => setShowTeamFeed(false)} />
+      )}
+      {showPreAlphaModal && (
+        <PreAlphaModal onClose={handleClosePreAlpha} />
       )}
     </div>
   );
