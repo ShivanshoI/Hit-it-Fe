@@ -1,11 +1,11 @@
 import React from 'react';
-import './PolicyPage.css';
+import './ExtensionPrivacyPolicy.css';
 
 export default function ExtensionPrivacyPolicy() {
   return (
-    <div className="policy-container">
-      <div className="policy-logo" onClick={() => window.location.href = '/'}>
-        HIT<span>IT</span>
+    <div className="extension-policy-container">
+      <div className="policy-logo" onClick={() => window.location.href = '/'} style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '-0.05em', color: 'var(--text)', cursor: 'pointer', marginBottom: '2rem', display: 'inline-block', fontFamily: 'var(--font-display)' }}>
+        HIT<span style={{ color: 'var(--purple)' }}>IT</span>
       </div>
       
       <h1>Hit-It Bridge Privacy Policy</h1>
@@ -52,7 +52,7 @@ export default function ExtensionPrivacyPolicy() {
       </p>
       
       <div style={{ marginTop: '4rem' }}>
-        <button onClick={() => window.location.href = '/'} style={{ padding: '0.75rem 1.5rem', background: '#fff', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+        <button onClick={() => window.location.href = '/'} className="extension-policy-back">
           ← Back to Home
         </button>
       </div>
