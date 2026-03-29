@@ -37,7 +37,11 @@ export default function App() {
   if (window.location.pathname === '/privacy-policy') {
     return <PrivacyPolicy />;
   }
-  if (window.location.pathname === '/extension-privacy-policy' || window.location.pathname === '/other-product-privacy') {
+  if (
+    window.location.pathname === '/extension-privacy-policy' ||
+    window.location.pathname === '/other-product-privacy' ||
+    window.location.pathname === '/privacy'
+  ) {
     return <ExtensionPrivacyPolicy />;
   }
 

@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import './PolicyPage.css';
+import ContactUsModal from '../components/ContactUsModal';
 
 export default function PrivacyPolicy() {
+  const [showContact, setShowContact] = useState(false);
   return (
     <div className="policy-container">
+      {showContact && <ContactUsModal onClose={() => setShowContact(false)} source="privacy" />}
       <div className="policy-logo" onClick={() => window.location.href = '/'}>
         HIT<span>IT</span>
       </div>
@@ -52,8 +55,25 @@ export default function PrivacyPolicy() {
 
       <h2>6. Contact Us</h2>
       <p>
-        If you have any questions about this Privacy Policy, please contact us at privacy@hit-it.app.
+        If you have any questions or feedback regarding our privacy practices, please get in touch with our team:
       </p>
+      
+      <button 
+        onClick={() => setShowContact(true)} 
+        style={{ 
+          marginTop: '1.25rem', padding: '0.85rem 1.75rem', 
+          background: 'var(--purple, #7c3aed)', color: '#fff', 
+          border: 'none', borderRadius: '10px', 
+          cursor: 'pointer', fontWeight: 700,
+          display: 'flex', alignItems: 'center', gap: '0.75rem',
+          boxShadow: '0 8px 16px -4px rgba(124, 58, 237, 0.25)'
+        }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
+        </svg>
+        Contact Support Team
+      </button>
       
       <div style={{ marginTop: '4rem' }}>
         <button onClick={() => window.location.href = '/'} style={{ padding: '0.75rem 1.5rem', background: '#fff', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>

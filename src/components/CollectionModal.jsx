@@ -1292,6 +1292,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
 
   const [recentHover, setRecentHover]         = useState(false);
   const [loading, setLoading]                 = useState(false);
+  const [bridgeError, setBridgeError]         = useState(false);
   const [response, setResponse]               = useState('');
   const [responseMeta, setResponseMeta]       = useState(null);
   const [responseSaved, setResponseSaved]     = useState(false);
@@ -1762,6 +1763,7 @@ export default function CollectionModal({ collection, onClose, recentCollections
         setLoading(false);
         return;
       }
+      setBridgeError(false);
       const resData = await hitRequest(targetId, teamId, orgId);
       
       setResponseMeta({
@@ -1787,7 +1789,24 @@ export default function CollectionModal({ collection, onClose, recentCollections
       setResponse(bodyText || '');
     } catch (err) {
       setResponseMeta(null);
-      setResponse(`Error: ${err.message || 'Unknown Error'}`);
+      // ── Bridge-not-connected detection ──────────────────────────────────────
+      // The backend returns a 503 or a message containing 'user extension is not connected'
+      // when it tries to route through the Bridge WebSocket but the extension isn't active.
+      const msg = (err.message || '').toLowerCase();
+      const isBridgeError =
+        err.status === 503 ||
+        msg.includes('user extension is not connected') ||
+        msg.includes('extension is not connected') ||
+        msg.includes('bridge not connected') ||
+        msg.includes('no bridge');
+
+      if (isBridgeError) {
+        setBridgeError(true);
+        setResponse('');
+      } else {
+        setBridgeError(false);
+        setResponse(`Error: ${err.message || 'Unknown Error'}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -2472,7 +2491,53 @@ export default function CollectionModal({ collection, onClose, recentCollections
                   <>
                     {loading&&<div className="cm-response-loading"><div className="cm-loading-dots"><span/><span/><span/></div><span>Sending request…</span></div>}
                     {!loading&&response&&<pre className="cm-response-pre">{response}</pre>}
-                    {!loading&&!response&&<div className="cm-response-empty">Hit Send to see the response</div>}
+                    {!loading&&bridgeError&&(
+                      <div style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        gap: '1rem', padding: '2.5rem 2rem', textAlign: 'center', height: '100%'
+                      }}>
+                        {/* Plug icon */}
+                        <div style={{
+                          width: 52, height: 52, borderRadius: '14px',
+                          background: 'rgba(239,68,68,0.1)', display: 'flex',
+                          alignItems: 'center', justifyContent: 'center',
+                          border: '1.5px solid rgba(239,68,68,0.25)'
+                        }}>
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H3m6 0h12m0 0V5M9 14l3 3m0 0 3-3m-3 3V9"/>
+                            <line x1="2" y1="2" x2="22" y2="22" stroke="#ef4444" strokeWidth="1.8" strokeLinecap="round"/>
+                          </svg>
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)', marginBottom: '0.4rem' }}>
+                            Hit-It Bridge Not Connected
+                          </div>
+                          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 340 }}>
+                            To test localhost APIs, please install and connect the
+                            <strong style={{ color: 'var(--text-2)' }}> Hit-It Bridge</strong> Chrome Extension.
+                            It's a tiny background helper that routes your localhost requests securely.
+                          </div>
+                        </div>
+                        <a
+                          href="https://chrome.google.com/webstore"
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                            padding: '0.6rem 1.2rem', borderRadius: '8px',
+                            background: 'var(--purple)', color: '#fff',
+                            fontWeight: 600, fontSize: '0.85rem', textDecoration: 'none',
+                            transition: 'opacity 0.15s'
+                          }}
+                          onMouseOver={e => e.currentTarget.style.opacity = '0.85'}
+                          onMouseOut={e => e.currentTarget.style.opacity = '1'}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 5a7 7 0 1 1 0 14A7 7 0 0 1 12 5z"/></svg>
+                          Install from Chrome Web Store
+                        </a>
+                      </div>
+                    )}
+                    {!loading&&!response&&!bridgeError&&<div className="cm-response-empty">Hit Send to see the response</div>}
                   </>
                 )}
               </div>
